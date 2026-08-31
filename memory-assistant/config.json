@@ -1,0 +1,5 @@
+{
+  "port": 3000,
+  "ollamaModel": "qwen3:8b",
+  "backupIntervalHours": 24
+}

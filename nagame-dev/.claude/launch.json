@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "memory-assistant",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/sawaosamu/Desktop/ツール開発/memory-assistant", "start"],
+      "port": 3000
+    }
+  ]
+}

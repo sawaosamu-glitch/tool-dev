@@ -1,0 +1,19 @@
+# 環境ファイル
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code internal
+.agent-trace/
+.agent_usage_state.json
+.workflow_state.json
+
+# Claude Code
+.mcp.json
+
+# ローカルのみ（memoryの中身は除外）
+.claude/memory/*.md
+!.claude/memory/.gitkeep

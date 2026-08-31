@@ -1,0 +1,54 @@
+<header class="app-header">
+  <h1>マッチ棒クイズPOP ジェネレーター（ローカル版）</h1>
+  <p>この1ファイルだけで動きます。インターネット接続やNode.jsは不要です。</p>
+</header>
+<div class="layout">
+  <div id="panel">
+    <fieldset>
+      <legend>出力する問題</legend>
+      <div class="inline" style="margin-bottom:8px">
+        <button type="button" class="toggle" id="selectAllBtn">全部選択</button>
+        <button type="button" class="toggle" id="selectNoneBtn">全部解除</button>
+      </div>
+      <div class="quiz-list" id="quizList"></div>
+      <p class="hint">チェックした問題だけがプレビューに表示されます。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>版面サイズ</legend>
+      <select id="sizePreset"></select>
+      <div class="custom-size" id="sizeCustomBox" style="display:none">
+        <input type="number" id="sizeW" min="50" max="2000" placeholder="幅mm"> ×
+        <input type="number" id="sizeH" min="50" max="2000" placeholder="高さmm">
+      </div>
+      <p class="hint">A4〜A1・B4〜B1、またはミリ単位で自由に指定できます（50〜2000mm）。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>大判の分割印刷</legend>
+      <label class="row"><input type="checkbox" id="tileEnabled"> 家庭・コンビニ用紙に分割して印刷する</label>
+      <div id="tileOptions" style="display:none; margin-top:10px">
+        <div class="inline">
+          <span>分割する用紙:</span>
+          <select id="tilePreset"></select>
+        </div>
+        <div class="custom-size" id="tileCustomBox" style="display:none">
+          <input type="number" id="tileW" min="50" max="2000" placeholder="幅mm"> ×
+          <input type="number" id="tileH" min="50" max="2000" placeholder="高さmm">
+        </div>
+        <div class="inline" style="margin-top:8px">
+          <label>のりしろ: <input type="number" id="tileOverlap" value="10" min="0" max="100" style="width:70px"> mm</label>
+        </div>
+        <p class="hint">版面サイズより大きい・同じ用紙は指定できません。</p>
+      </div>
+    </fieldset>
+
+    <button type="button" class="action primary" id="renderBtn">プレビューを更新</button>
+    <button type="button" class="action secondary" id="downloadAllBtn">⬇️ 全ページを1つのHTMLで保存</button>
+    <button type="button" class="action secondary" id="downloadWebBtn">⬇️ Web公開用の1ページ版を保存</button>
+    <button type="button" class="action secondary" id="downloadAnswersBtn">⬇️ 解答一覧を保存</button>
+
+    <div id="status"></div>
+  </div>
+  <div id="output"></div>
+</div>

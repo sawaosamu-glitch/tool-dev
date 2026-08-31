@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マッチ棒クイズPOP ジェネレーター（ローカル版）</title>
+<style>
+:root { --navy-1:#1B2A55; --navy-2:#101B3A; --navy-3:#0A1226; --gold:#E8C468; --gold-dark:#A9791F; --maroon:#7A2230; --ink:#1B1206; --paper:#FFFDF6; }
+* { box-sizing: border-box; }
+body { margin:0; padding:0; background:#3A3F4B; color:var(--ink); font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; }
+
+header.app-header { background:linear-gradient(180deg,var(--navy-1),var(--navy-3)); color:var(--gold); padding:18px 24px; border-bottom:4px solid var(--gold); }
+header.app-header h1 { margin:0; font-size:19px; }
+header.app-header p { margin:6px 0 0; font-size:12px; color:#D8CDB0; }
+
+.layout { display:flex; align-items:flex-start; }
+#panel { width:340px; flex:0 0 340px; background:var(--paper); padding:20px 20px 60px; max-height:calc(100vh - 70px); overflow-y:auto; position:sticky; top:0; }
+#output { flex:1; min-width:0; padding:24px; }
+
+fieldset { border:1px solid #D8CDB0; border-radius:8px; margin:0 0 16px; padding:12px 14px; }
+legend { padding:0 6px; font-weight:700; color:var(--navy-1); font-size:13px; }
+label.row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px; }
+.quiz-list { max-height:220px; overflow-y:auto; border:1px solid #E8E0CC; border-radius:6px; padding:8px 10px; background:#fff; }
+.quiz-list label { display:block; font-size:12px; padding:3px 0; }
+select, input[type=number] { font-size:13px; padding:4px 8px; border:1px solid #C9BE9E; border-radius:4px; width:100%; }
+.inline { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.custom-size { display:flex; gap:8px; align-items:center; margin-top:8px; }
+.custom-size input { width:80px; }
+button.toggle { font-size:11px; padding:2px 8px; border:1px solid var(--navy-1); background:#fff; color:var(--navy-1); border-radius:4px; cursor:pointer; }
+button.action { display:block; width:100%; padding:11px; margin-top:8px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+button.primary { background:var(--maroon); color:var(--paper); }
+button.primary:hover { filter:brightness(1.08); }
+button.secondary { background:var(--navy-1); color:#fff; }
+button.secondary:hover { filter:brightness(1.15); }
+.hint { font-size:11px; color:#6b6250; margin:6px 0 0; }
+
+.quiz-block { max-width: 900px; margin: 0 auto 20px; }
+.per-quiz-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin:10px 0 34px; }
+.per-quiz-actions button { padding:6px 12px; font-size:12px; border-radius:6px; border:1px solid var(--navy-1); background:#fff; color:var(--navy-1); cursor:pointer; }
+.per-quiz-actions button:hover { background:var(--navy-1); color:#fff; }
+
+#status { margin-top:12px; font-size:12px; color:#6b6250; line-height:1.7; white-space:pre-line; }
+.error-box { background:#FBE4E4; border-left:6px solid #B4342A; padding:10px 14px; border-radius:6px; font-size:12px; margin-top:12px; white-space:pre-line; }
+.empty-hint { max-width:520px; margin:60px auto; text-align:center; color:#EDEBE3; font-size:14px; line-height:1.9; }
+
+</style>
+</head>
+<body>
+<header class="app-header">
+  <h1>マッチ棒クイズPOP ジェネレーター（ローカル版）</h1>
+  <p>この1ファイルだけで動きます。インターネット接続やNode.jsは不要です。</p>
+</header>
+<div class="layout">
+  <div id="panel">
+    <fieldset>
+      <legend>出力する問題</legend>
+      <div class="inline" style="margin-bottom:8px">
+        <button type="button" class="toggle" id="selectAllBtn">全部選択</button>
+        <button type="button" class="toggle" id="selectNoneBtn">全部解除</button>
+      </div>
+      <div class="quiz-list" id="quizList"></div>
+      <p class="hint">チェックした問題だけがプレビューに表示されます。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>版面サイズ</legend>
+      <select id="sizePreset"></select>
+      <div class="custom-size" id="sizeCustomBox" style="display:none">
+        <input type="number" id="sizeW" min="50" max="2000" placeholder="幅mm"> ×
+        <input type="number" id="sizeH" min="50" max="2000" placeholder="高さmm">
+      </div>
+      <p class="hint">A4〜A1・B4〜B1、またはミリ単位で自由に指定できます（50〜2000mm）。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>大判の分割印刷</legend>
+      <label class="row"><input type="checkbox" id="tileEnabled"> 家庭・コンビニ用紙に分割して印刷する</label>
+      <div id="tileOptions" style="display:none; margin-top:10px">
+        <div class="inline">
+          <span>分割する用紙:</span>
+          <select id="tilePreset"></select>
+        </div>
+        <div class="custom-size" id="tileCustomBox" style="display:none">
+          <input type="number" id="tileW" min="50" max="2000" placeholder="幅mm"> ×
+          <input type="number" id="tileH" min="50" max="2000" placeholder="高さmm">
+        </div>
+        <div class="inline" style="margin-top:8px">
+          <label>のりしろ: <input type="number" id="tileOverlap" value="10" min="0" max="100" style="width:70px"> mm</label>
+        </div>
+        <p class="hint">版面サイズより大きい・同じ用紙は指定できません。</p>
+      </div>
+    </fieldset>
+
+    <button type="button" class="action primary" id="renderBtn">プレビューを更新</button>
+    <button type="button" class="action secondary" id="downloadAllBtn">⬇️ 全ページを1つのHTMLで保存</button>
+    <button type="button" class="action secondary" id="downloadWebBtn">⬇️ Web公開用の1ページ版を保存</button>
+    <button type="button" class="action secondary" id="downloadAnswersBtn">⬇️ 解答一覧を保存</button>
+
+    <div id="status"></div>
+  </div>
+  <div id="output"></div>
+</div>
+
+<script>
+"use strict";
+
+const POP_CSS = "/* マッチ棒クイズPOP — 全寸法をページ幅 --pw の比率で定義（A4〜A1で同一の見た目） */\n/* 配色: 探偵・謎解き風（濃紺×金×臙脂） */\n:root {\n  --navy-1: #1B2A55;\n  --navy-2: #101B3A;\n  --navy-3: #0A1226;\n  --gold: #E8C468;\n  --gold-dark: #A9791F;\n  --maroon: #7A2230;\n  --maroon-dark: #4A1420;\n  --ink: #1B1206;\n  --paper: #FFFDF6;\n}\n\n* { box-sizing: border-box; }\n\nhtml, body {\n  margin: 0;\n  padding: 0;\n  background: #55585E;\n  font-family: \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", \"Yu Gothic\", \"YuGothic\",\n               \"Noto Sans JP\", \"Meiryo\", sans-serif;\n  -webkit-print-color-adjust: exact;\n  print-color-adjust: exact;\n}\n\n.stage { display: flex; flex-direction: column; align-items: center; padding: 24px 0 48px; }\n\n.pop {\n  width: var(--pw);\n  height: var(--ph);\n  background: var(--paper);\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n  position: relative;\n}\n\n/* ── 上部：見出し帯（濃紺地に細い金の罫線とハトメ風の角飾り） ─── */\n.band-top {\n  position: relative;\n  flex: 0 0 auto;\n  background:\n    repeating-linear-gradient(115deg,\n      rgba(232, 196, 104, 0.07) 0 calc(var(--pw) * 0.003),\n      rgba(232, 196, 104, 0) calc(var(--pw) * 0.003) calc(var(--pw) * 0.05)),\n    radial-gradient(120% 140% at 50% -20%, var(--navy-1) 0%, var(--navy-2) 55%, var(--navy-3) 100%);\n  border-bottom: calc(var(--pw) * 0.01) solid var(--gold);\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  align-items: center;\n  padding: calc(var(--pw) * 0.055) calc(var(--pw) * 0.035) calc(var(--pw) * 0.028);\n}\n\n.headline { width: 90%; display: block; }\n.headline svg { width: 100%; height: auto; display: block; }\n\n.emblem {\n  position: absolute;\n  top: calc(var(--pw) * 0.02);\n  width: calc(var(--pw) * 0.065);\n  opacity: 0.95;\n  filter: drop-shadow(0 calc(var(--pw) * 0.003) calc(var(--pw) * 0.003) rgba(0, 0, 0, 0.4));\n}\n.emblem.left { left: calc(var(--pw) * 0.03); }\n.emblem.right { right: calc(var(--pw) * 0.03); }\n.emblem svg { width: 100%; height: auto; display: block; }\n\n/* ── サブ帯：挑戦状（真鍮プレート風） ──────────────────── */\n.subband {\n  width: 100%;\n  margin-top: calc(var(--pw) * 0.018);\n  background: linear-gradient(180deg, var(--navy-1) 0%, var(--navy-3) 100%);\n  border: calc(var(--pw) * 0.004) solid var(--gold);\n  border-radius: calc(var(--pw) * 0.006);\n  padding: calc(var(--pw) * 0.014) calc(var(--pw) * 0.02);\n  box-shadow: 0 calc(var(--pw) * 0.006) 0 rgba(0, 0, 0, 0.28);\n}\n.subband svg { width: 100%; height: auto; display: block; }\n\n/* ── 本体：問題 ───────────────────────────────────── */\n.body {\n  flex: 1 1 auto;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: calc(var(--pw) * 0.022);\n  padding: calc(var(--pw) * 0.032) calc(var(--pw) * 0.05);\n  min-height: 0;\n}\n\n.question {\n  margin: 0;\n  text-align: center;\n  color: var(--ink);\n  font-size: calc(var(--pw) * 0.052);\n  font-weight: 900;\n  line-height: 1.45;\n  letter-spacing: 0.01em;\n  white-space: pre-line;\n}\n\n.figure {\n  flex: 1 1 auto;\n  width: 100%;\n  min-height: 0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n.figure svg { width: 100%; height: 100%; max-height: 100%; display: block; }\n\n.meta {\n  color: #8A8F98;\n  font-size: calc(var(--pw) * 0.021);\n  font-weight: 700;\n  letter-spacing: 0.08em;\n}\n.meta .star { color: var(--gold-dark); }\n\n/* ── 下部：景品帯 ─────────────────────────────────── */\n.band-bottom {\n  flex: 0 0 auto;\n  height: calc(var(--pw) * 0.13);\n  background: linear-gradient(180deg, var(--maroon) 0%, var(--maroon-dark) 100%);\n  border-top: calc(var(--pw) * 0.012) solid var(--gold);\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 0 calc(var(--pw) * 0.05);\n}\n.band-bottom svg { width: 100%; height: auto; display: block; }\n\n/* ── 画面プレビュー時のみの案内 ───────────────────── */\n.note {\n  max-width: 820px;\n  margin: 0 auto 20px;\n  padding: 16px 20px;\n  background: #FFF8E1;\n  border-left: 6px solid var(--gold-dark);\n  border-radius: 6px;\n  color: #3A2C10;\n  font-size: 14px;\n  line-height: 1.8;\n}\n.note h2 { margin: 0 0 8px; font-size: 15px; }\n.note code { background: #F0E4BE; padding: 1px 5px; border-radius: 3px; }\n.note a { color: #A8500C; }\n\n.frame { overflow: hidden; margin-bottom: 28px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35); }\n.scaler { transform-origin: top left; }\n\n/* ── 大判の分割印刷（タイル） ─────────────────────── */\n.tile-page {\n  position: relative;\n  overflow: hidden;\n  background: #fff;\n  margin: 0 auto 28px;\n  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);\n}\n.tile-canvas { position: absolute; }\n.tile-label {\n  position: absolute;\n  left: 4mm;\n  top: 4mm;\n  z-index: 5;\n  padding: 1mm 3mm;\n  background: rgba(255, 255, 255, 0.85);\n  border: 0.4mm solid var(--ink);\n  border-radius: 2mm;\n  font-size: 10px;\n  font-weight: 700;\n  color: var(--ink);\n}\n\n@media print {\n  html, body { background: #FFF; }\n  .stage { padding: 0; display: block; }\n  .note { display: none !important; }\n  .frame { width: auto !important; height: auto !important; overflow: visible; margin: 0; box-shadow: none; }\n  .scaler { transform: none !important; }\n  .pop { page-break-after: always; break-after: page; }\n  .pop:last-child { page-break-after: auto; break-after: auto; }\n  .tile-page { margin: 0; box-shadow: none; page-break-after: always; break-after: page; }\n  .tile-page:last-child { page-break-after: auto; break-after: auto; }\n}\n";
+
+const EMBEDDED_QUIZZES = [{"id":"SQ-001","type":"squares","difficulty":3,"moves":2,"question":"マッチ棒2本を動かして\n2コの四角を3コにしなさい","start":["h:0:0","h:0:2","v:0:0","v:2:0","h:4:0","h:4:2","v:4:0","v:6:0","h:6:0","h:6:2"],"w":4,"h":2,"goalSquares":3},{"id":"EQ-001","type":"equation","difficulty":3,"moves":2,"question":"マッチ棒を2本動かして\n正しい式にせよ","expr":"6+9=7"},{"id":"EQ-002","type":"equation","difficulty":1,"moves":1,"question":"マッチ棒を1本動かして\n正しい式にせよ","expr":"8+3=5"},{"id":"EQ-003","type":"equation","difficulty":1,"moves":1,"question":"マッチ棒を1本動かして\n正しい式にせよ","expr":"5+7=2"},{"id":"EQ-004","type":"equation","difficulty":2,"moves":1,"question":"マッチ棒を1本動かして\n正しい式にせよ","expr":"9+5=6"},{"id":"EQ-005","type":"equation","difficulty":2,"moves":2,"question":"マッチ棒を2本動かして\n正しい式にせよ","expr":"1+2=6"},{"id":"EQ-006","type":"equation","difficulty":3,"moves":2,"question":"マッチ棒を2本動かして\n正しい式にせよ","expr":"1+3=8"},{"id":"SQ-002","type":"squares","difficulty":3,"moves":3,"question":"マッチ棒3本を動かして\n5コの四角を3コにしなさい","start":["h:0:0","h:2:0","h:0:2","h:2:2","h:0:4","h:2:4","v:0:0","v:2:0","v:4:0","v:0:2","v:2:2","v:4:2"],"w":3,"h":3,"goalSquares":3}];
+
+// ---- src/lib/matches.js ----
+
+// 座標系: 1マッチ棒の長さ = 2 half-unit。全座標は整数の half-unit。
+// マッチ棒は "h:x:y"（(x,y)から右へ長さ2）または "v:x:y"（(x,y)から下へ長さ2）。
+const MATCH_LEN = 2;
+
+const KEY_RE = /^([hv]):(-?\d+):(-?\d+)$/;
+
+function key(dir, x, y) {
+  if (dir !== 'h' && dir !== 'v') throw new Error(`invalid dir: ${dir}`);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    throw new Error(`coordinates must be integers: ${x},${y}`);
+  }
+  return `${dir}:${x}:${y}`;
+}
+
+function parseKey(k) {
+  const m = KEY_RE.exec(k);
+  if (!m) throw new Error(`invalid match key: ${k}`);
+  return { dir: m[1], x: Number(m[2]), y: Number(m[3]) };
+}
+
+function endpoints(k) {
+  const { dir, x, y } = parseKey(k);
+  return dir === 'h'
+    ? { x1: x, y1: y, x2: x + MATCH_LEN, y2: y }
+    : { x1: x, y1: y, x2: x, y2: y + MATCH_LEN };
+}
+
+function translate(keys, dx, dy) {
+  return keys.map((k) => {
+    const { dir, x, y } = parseKey(k);
+    return key(dir, x + dx, y + dy);
+  });
+}
+
+function bbox(keys) {
+  if (keys.length === 0) throw new Error('bbox of empty match set');
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const k of keys) {
+    const { x1, y1, x2, y2 } = endpoints(k);
+    minX = Math.min(minX, x1); minY = Math.min(minY, y1);
+    maxX = Math.max(maxX, x2); maxY = Math.max(maxY, y2);
+  }
+  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+}
+
+// 差集合のサイズ = 動かした本数（本数が等しい前提）
+function moveCount(fromKeys, toKeys) {
+  const from = new Set(fromKeys);
+  const to = new Set(toKeys);
+  if (from.size !== fromKeys.length) throw new Error('duplicate match in source');
+  if (to.size !== toKeys.length) throw new Error('duplicate match in target');
+  if (from.size !== to.size) return null; // 本数が変わる = 「移動」では到達不能
+  let removed = 0;
+  for (const k of from) if (!to.has(k)) removed += 1;
+  return removed;
+}
+
+// ---- src/lib/segments.js ----
+
+// 7セグメント（1桁 = 幅2 x 高さ4 half-unit）
+//   a
+// f   b
+//   g
+// e   c
+//   d
+const SEGMENT_KEYS = {
+  a: key('h', 0, 0),
+  b: key('v', 2, 0),
+  c: key('v', 2, 2),
+  d: key('h', 0, 4),
+  e: key('v', 0, 2),
+  f: key('v', 0, 0),
+  g: key('h', 0, 2),
+};
+
+const DIGIT_SEGMENTS = {
+  0: 'abcdef',
+  1: 'bc',
+  2: 'abged',
+  3: 'abgcd',
+  4: 'fgbc',
+  5: 'afgcd',
+  6: 'afgedc',
+  7: 'abc',
+  8: 'abcdefg',
+  9: 'abcdfg',
+};
+
+// 演算子も同じ 幅2 x 高さ4 のセルに収める
+const OPERATOR_KEYS = {
+  '+': [key('h', 0, 2), key('v', 1, 1)],
+  '-': [key('h', 0, 2)],
+  '=': [key('h', 0, 1), key('h', 0, 3)],
+};
+
+const SLOT_W = 2;
+const SLOT_GAP = 2;
+const SLOT_PITCH = SLOT_W + SLOT_GAP;
+
+function digitMatches(d) {
+  const segs = DIGIT_SEGMENTS[String(d)];
+  if (!segs) throw new Error(`invalid digit: ${d}`);
+  return [...segs].map((s) => SEGMENT_KEYS[s]);
+}
+
+function operatorMatches(op) {
+  const ks = OPERATOR_KEYS[op];
+  if (!ks) throw new Error(`invalid operator: ${op}`);
+  return ks.slice();
+}
+
+function slotMatches(ch) {
+  return /^[0-9]$/.test(ch) ? digitMatches(ch) : operatorMatches(ch);
+}
+
+function slotStickCount(ch) {
+  return slotMatches(ch).length;
+}
+
+// "6+9=7" → 各スロットを絶対座標に展開したマッチ棒キー配列
+function expressionMatches(expr) {
+  const chars = [...expr];
+  const out = [];
+  chars.forEach((ch, i) => {
+    out.push(...translate(slotMatches(ch), i * SLOT_PITCH, 0));
+  });
+  const seen = new Set();
+  for (const k of out) {
+    if (seen.has(k)) throw new Error(`overlapping matches in expression: ${expr}`);
+    seen.add(k);
+  }
+  return out;
+}
+
+function expressionWidth(expr) {
+  return [...expr].length * SLOT_PITCH - SLOT_GAP;
+}
+
+// ---- src/lib/equation-solver.js ----
+
+const MAX_COMBINATIONS = 2_000_000;
+
+// "12+3=15" を評価。等号は1つだけ、左辺は + / - の左から順の計算。
+// 多桁数の先頭0（"01"）は不正な式として扱う。
+function evaluateExpression(expr) {
+  const sides = expr.split('=');
+  if (sides.length !== 2) return { valid: false, reason: 'equals-count' };
+
+  const parseSide = (s) => {
+    if (!/^[0-9]+([+-][0-9]+)*$/.test(s)) return null;
+    const nums = s.split(/[+-]/);
+    if (nums.some((n) => n.length > 1 && n.startsWith('0'))) return null;
+    let total = Number(nums[0]);
+    let idx = nums[0].length;
+    for (let i = 1; i < nums.length; i += 1) {
+      const op = s[idx];
+      total = op === '+' ? total + Number(nums[i]) : total - Number(nums[i]);
+      idx += 1 + nums[i].length;
+    }
+    return total;
+  };
+
+  const left = parseSide(sides[0]);
+  const right = parseSide(sides[1]);
+  if (left === null || right === null) return { valid: false, reason: 'syntax' };
+  return { valid: true, correct: left === right, left, right };
+}
+
+function isCorrectEquation(expr) {
+  const r = evaluateExpression(expr);
+  return r.valid && r.correct;
+}
+
+function slotCandidates(ch) {
+  if (/^[0-9]$/.test(ch)) return ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  if (ch === '+' || ch === '-') return ['+', '-'];
+  if (ch === '=') return ['='];
+  throw new Error(`unsupported character in expression: ${ch}`);
+}
+
+// ちょうど moves 本を動かして正しい式にできる解を全列挙する。
+// スロット数・配置は固定（マッチ棒の総数が変わらない範囲でのみ探索）。
+function solveEquation(expr, moves) {
+  if (!Number.isInteger(moves) || moves < 1) throw new Error('moves must be a positive integer');
+  const chars = [...expr];
+  const candidates = chars.map(slotCandidates);
+  const total = candidates.reduce((acc, c) => acc * c.length, 1);
+  if (total > MAX_COMBINATIONS) {
+    throw new Error(`search space too large: ${total} combinations`);
+  }
+
+  const source = expressionMatches(expr);
+  const solutions = [];
+  const buf = new Array(chars.length);
+
+  const walk = (i) => {
+    if (i === chars.length) {
+      const target = buf.join('');
+      if (target === expr) return;
+      if (!isCorrectEquation(target)) return;
+      const n = moveCount(source, expressionMatches(target));
+      if (n === moves) solutions.push({ expr: target, moves: n });
+      return;
+    }
+    for (const ch of candidates[i]) {
+      buf[i] = ch;
+      walk(i + 1);
+    }
+  };
+  walk(0);
+
+  solutions.sort((a, b) => (a.expr < b.expr ? -1 : 1));
+  return solutions;
+}
+
+// ---- src/lib/squares-solver.js ----
+
+const MAX_SEARCH = 5_000_000;
+
+// 格子は「セル単位」で扱う。セル境界は half-unit で 2 刻み。
+function latticePositions(w, h) {
+  const out = [];
+  for (let y = 0; y <= h; y += 1) for (let x = 0; x < w; x += 1) out.push(key('h', x * 2, y * 2));
+  for (let y = 0; y < h; y += 1) for (let x = 0; x <= w; x += 1) out.push(key('v', x * 2, y * 2));
+  return out;
+}
+
+function edgeKeysOfSquare(x, y, size) {
+  const ks = [];
+  for (let i = 0; i < size; i += 1) {
+    ks.push(key('h', (x + i) * 2, y * 2));
+    ks.push(key('h', (x + i) * 2, (y + size) * 2));
+    ks.push(key('v', x * 2, (y + i) * 2));
+    ks.push(key('v', (x + size) * 2, (y + i) * 2));
+  }
+  return ks;
+}
+
+// 任意サイズの軸平行な正方形を全て数える
+function findSquares(keys, w, h) {
+  const set = new Set(keys);
+  const found = [];
+  for (let size = 1; size <= Math.min(w, h); size += 1) {
+    for (let y = 0; y + size <= h; y += 1) {
+      for (let x = 0; x + size <= w; x += 1) {
+        const edges = edgeKeysOfSquare(x, y, size);
+        if (edges.every((k) => set.has(k))) found.push({ x, y, size, edges });
+      }
+    }
+  }
+  return found;
+}
+
+function countSquares(keys, w, h) {
+  return findSquares(keys, w, h).length;
+}
+
+// どの正方形の辺にもなっていないマッチ棒（余り棒）
+function leftoverMatches(keys, w, h) {
+  const used = new Set();
+  for (const sq of findSquares(keys, w, h)) for (const k of sq.edges) used.add(k);
+  return keys.filter((k) => !used.has(k));
+}
+
+function* combinations(arr, k) {
+  const idx = [];
+  const rec = function* (start) {
+    if (idx.length === k) { yield idx.map((i) => arr[i]); return; }
+    for (let i = start; i < arr.length; i += 1) {
+      idx.push(i);
+      yield* rec(i + 1);
+      idx.pop();
+    }
+  };
+  yield* rec(0);
+}
+
+function withinBounds(k, w, h) {
+  const { dir, x, y } = parseKey(k);
+  if (x % 2 !== 0 || y % 2 !== 0) return false;
+  const cx = x / 2;
+  const cy = y / 2;
+  return dir === 'h'
+    ? cx >= 0 && cx < w && cy >= 0 && cy <= h
+    : cx >= 0 && cx <= w && cy >= 0 && cy < h;
+}
+
+/**
+ * ちょうど moves 本動かして正方形が goalSquares 個になる解を全列挙する。
+ * allowLeftover=false なら、解の状態で余り棒が1本もないものだけを解とする。
+ */
+function solveSquares(startKeys, options) {
+  const { moves, goalSquares, w, h, allowLeftover = false } = options;
+  if (!Number.isInteger(moves) || moves < 1) throw new Error('moves must be a positive integer');
+  for (const k of startKeys) {
+    if (!withinBounds(k, w, h)) throw new Error(`match outside grid ${w}x${h}: ${k}`);
+  }
+
+  const all = latticePositions(w, h);
+  const startSet = new Set(startKeys);
+  const free = all.filter((k) => !startSet.has(k));
+
+  const nRemove = [...combinations(startKeys, moves)];
+  const nAdd = [...combinations(free, moves)];
+  if (nRemove.length * nAdd.length > MAX_SEARCH) {
+    throw new Error(`search space too large: ${nRemove.length * nAdd.length}`);
+  }
+
+  const solutions = [];
+  for (const removed of nRemove) {
+    const kept = startKeys.filter((k) => !removed.includes(k));
+    for (const added of nAdd) {
+      const next = kept.concat(added);
+      if (countSquares(next, w, h) !== goalSquares) continue;
+      if (!allowLeftover && leftoverMatches(next, w, h).length > 0) continue;
+      solutions.push({ removed: removed.slice(), added: added.slice(), matches: next.slice().sort() });
+    }
+  }
+  return solutions;
+}
+
+// ---- src/lib/svg.js ----
+
+const DEFAULTS = {
+  unit: 40,          // half-unit あたりの px（マッチ棒1本 = unit * 2）
+  padding: 0.6,      // half-unit 単位の余白
+  stick: '#B4763C',
+  stickEdge: '#7A4A20',
+  head: '#D8352A',
+  headEdge: '#9C1F16',
+  ghost: '#C9CDD4',
+  added: '#1E8E4E',
+};
+
+const round = (n) => Math.round(n * 1000) / 1000;
+
+function stickGeometry(k, unit) {
+  const { dir, x, y } = parseKey(k);
+  const len = MATCH_LEN * unit;
+  const thick = unit * 0.30;
+  const px = x * unit;
+  const py = y * unit;
+  return dir === 'h'
+    ? { x: px, y: py - thick / 2, w: len, h: thick, hx: px + len - thick * 0.55, hy: py }
+    : { x: px - thick / 2, y: py, w: thick, h: len, hx: px, hy: py + len - thick * 0.55 };
+}
+
+function stickSvg(k, unit, colors) {
+  const g = stickGeometry(k, unit);
+  const thick = unit * 0.30;
+  const r = thick * 0.72;
+  return (
+    `<rect x="${round(g.x)}" y="${round(g.y)}" width="${round(g.w)}" height="${round(g.h)}" ` +
+    `rx="${round(thick / 2)}" fill="${colors.stick}" stroke="${colors.stickEdge}" stroke-width="${round(unit * 0.045)}"/>` +
+    `<circle cx="${round(g.hx)}" cy="${round(g.hy)}" r="${round(r)}" ` +
+    `fill="${colors.head}" stroke="${colors.headEdge}" stroke-width="${round(unit * 0.045)}"/>`
+  );
+}
+
+function svgWrap(inner, box, unit, padding, extraAttrs = '') {
+  const pad = padding * unit;
+  const x = round(box.minX * unit - pad);
+  const y = round(box.minY * unit - pad);
+  const w = round(box.w * unit + pad * 2);
+  const h = round(box.h * unit + pad * 2);
+  return (
+    `<svg viewBox="${x} ${y} ${w} ${h}" xmlns="http://www.w3.org/2000/svg" ` +
+    `preserveAspectRatio="xMidYMid meet" role="img"${extraAttrs}>${inner}</svg>`
+  );
+}
+
+function renderMatches(keys, options = {}) {
+  if (!Array.isArray(keys) || keys.length === 0) throw new Error('renderMatches: empty match list');
+  const o = { ...DEFAULTS, ...options };
+  const box = bbox(keys);
+  const inner = keys.map((k) => stickSvg(k, o.unit, o)).join('');
+  return svgWrap(inner, box, o.unit, o.padding);
+}
+
+// 解答図: 元の位置に残る棒は通常色、動かした先は強調、抜いた位置は薄いゴースト。
+function renderSolution(fromKeys, toKeys, options = {}) {
+  const o = { ...DEFAULTS, ...options };
+  const from = new Set(fromKeys);
+  const to = new Set(toKeys);
+  const removed = fromKeys.filter((k) => !to.has(k));
+  const kept = toKeys.filter((k) => from.has(k));
+  const added = toKeys.filter((k) => !from.has(k));
+
+  const box = bbox([...new Set([...fromKeys, ...toKeys])]);
+  const ghostColors = { stick: o.ghost, stickEdge: o.ghost, head: o.ghost, headEdge: o.ghost };
+  const addedColors = { ...o, stick: '#3FA96B', stickEdge: '#1E8E4E', head: o.head, headEdge: o.headEdge };
+
+  const inner =
+    removed.map((k) => `<g opacity="0.45">${stickSvg(k, o.unit, ghostColors)}</g>`).join('') +
+    kept.map((k) => stickSvg(k, o.unit, o)).join('') +
+    added.map((k) => stickSvg(k, o.unit, addedColors)).join('');
+
+  return svgWrap(inner, box, o.unit, o.padding);
+}
+
+// ---- src/lib/quiz.js (loadQuizzes を除く。データはEMBEDDED_QUIZZESで埋め込み済み) ----
+
+const TYPES = new Set(['equation', 'squares']);
+
+function fail(id, msg) {
+  throw new Error(`quiz ${id || '(no id)'}: ${msg}`);
+}
+
+function validateQuiz(q) {
+  if (!q || typeof q !== 'object') throw new Error('quiz must be an object');
+  if (typeof q.id !== 'string' || !/^[A-Z]{2}-\d{3}$/.test(q.id)) {
+    fail(q.id, 'id must match /^[A-Z]{2}-\\d{3}$/ (例: EQ-001)');
+  }
+  if (!TYPES.has(q.type)) fail(q.id, `type must be one of ${[...TYPES].join('|')}`);
+  if (!Number.isInteger(q.moves) || q.moves < 1 || q.moves > 3) fail(q.id, 'moves must be 1..3');
+  if (typeof q.question !== 'string' || q.question.trim() === '') fail(q.id, 'question is required');
+
+  if (q.type === 'equation') {
+    if (typeof q.expr !== 'string' || !/^[0-9+\-=]+$/.test(q.expr)) fail(q.id, 'expr must contain only 0-9 + - =');
+    if (!q.expr.includes('=')) fail(q.id, 'expr must contain "="');
+  } else {
+    if (!Array.isArray(q.start) || q.start.length === 0) fail(q.id, 'start must be a non-empty array');
+    if (new Set(q.start).size !== q.start.length) fail(q.id, 'start contains duplicate matches');
+    if (!Number.isInteger(q.w) || !Number.isInteger(q.h) || q.w < 1 || q.h < 1) fail(q.id, 'w/h must be positive integers');
+    if (!Number.isInteger(q.goalSquares) || q.goalSquares < 1) fail(q.id, 'goalSquares must be a positive integer');
+  }
+  return q;
+}
+
+function quizMatches(q) {
+  return q.type === 'equation' ? expressionMatches(q.expr) : q.start.slice();
+}
+
+function solveQuiz(q) {
+  validateQuiz(q);
+  const allowLeftover = q.allowLeftover === true;
+
+  if (q.type === 'equation') {
+    if (isCorrectEquation(q.expr)) {
+      return { ok: false, reason: 'source-already-correct', solutions: [], easier: [] };
+    }
+    const easier = [];
+    for (let k = 1; k < q.moves; k += 1) {
+      if (solveEquation(q.expr, k).length > 0) easier.push(k);
+    }
+    const solutions = solveEquation(q.expr, q.moves).map((s) => ({
+      label: s.expr,
+      matches: expressionMatches(s.expr),
+    }));
+    return {
+      ok: solutions.length > 0 && easier.length === 0,
+      reason: solutions.length === 0 ? 'no-solution' : easier.length ? 'solvable-with-fewer-moves' : 'ok',
+      solutions,
+      easier,
+    };
+  }
+
+  const opts = { goalSquares: q.goalSquares, w: q.w, h: q.h, allowLeftover };
+  const startSquares = countSquares(q.start, q.w, q.h);
+  if (startSquares === q.goalSquares) {
+    return { ok: false, reason: 'start-already-goal', solutions: [], easier: [], startSquares };
+  }
+  const easier = [];
+  for (let k = 1; k < q.moves; k += 1) {
+    if (solveSquares(q.start, { ...opts, moves: k }).length > 0) easier.push(k);
+  }
+  const solutions = solveSquares(q.start, { ...opts, moves: q.moves }).map((s) => ({
+    label: `${q.goalSquares}コの四角`,
+    matches: s.matches,
+  }));
+  return {
+    ok: solutions.length > 0 && easier.length === 0,
+    reason: solutions.length === 0 ? 'no-solution' : easier.length ? 'solvable-with-fewer-moves' : 'ok',
+    solutions,
+    easier,
+    startSquares,
+  };
+}
+
+// ---- src/lib/pop.js (CSS読込をPOP_CSSに差し替え) ----
+
+// JIS/ISO 用紙サイズ（mm）
+const PAGE_SIZES = {
+  A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189],
+  B4: [257, 364], B3: [364, 515], B2: [515, 728], B1: [728, 1030],
+};
+const MM_TO_PX = 96 / 25.4;
+const PREVIEW_WIDTH_PX = 820;
+
+function resolveSize(spec) {
+  const name = String(spec).toUpperCase();
+  if (PAGE_SIZES[name]) return { name, w: PAGE_SIZES[name][0], h: PAGE_SIZES[name][1] };
+  const m = /^(\d+(?:\.\d+)?)X(\d+(?:\.\d+)?)$/.exec(name);
+  if (!m) throw new Error(`unknown size: ${spec} (使用可: ${Object.keys(PAGE_SIZES).join(', ')} または 600x900)`);
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (w < 50 || h < 50 || w > 2000 || h > 2000) throw new Error(`size out of range: ${spec}`);
+  return { name: `${w}x${h}`, w, h };
+}
+
+const escapeHtml = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * 幅ぴったりに収まる袋文字。textLength で字送りを強制するため、
+ * 環境のフォントに関係なく版面からはみ出さない。
+ */
+function outlinedText(text, opts = {}) {
+  const {
+    boxW = 1000, fontSize = 200, fill = '#FFFFFF', stroke = '#241505',
+    strokeWidth = 22, shadow = null, shadowDx = 10, shadowDy = 14, letterSpacing = 0,
+  } = opts;
+  const pad = strokeWidth * 1.2;
+  const boxH = fontSize * 1.34 + Math.abs(shadowDy) + strokeWidth;
+  const baseline = fontSize * 1.0 + strokeWidth * 0.6;
+  const t = escapeHtml(text);
+  const common =
+    `x="${boxW / 2}" text-anchor="middle" textLength="${boxW - pad * 2}" ` +
+    `lengthAdjust="spacingAndGlyphs" font-size="${fontSize}" font-weight="900" ` +
+    `letter-spacing="${letterSpacing}" ` +
+    `font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, Yu Gothic, Noto Sans JP, Meiryo, sans-serif"`;
+  const shadowNode = shadow
+    ? `<text ${common} y="${baseline + shadowDy}" dx="${shadowDx}" fill="${shadow}" stroke="${shadow}" ` +
+      `stroke-width="${strokeWidth}" paint-order="stroke">${t}</text>`
+    : '';
+  return (
+    `<svg viewBox="0 0 ${boxW} ${boxH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${t}">` +
+    shadowNode +
+    `<text ${common} y="${baseline}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" ` +
+    `paint-order="stroke" stroke-linejoin="round">${t}</text>` +
+    `</svg>`
+  );
+}
+
+// 探偵・謎解き風の角飾り。左に虫眼鏡、右に歯車を置く（左右非対称は意図的）。
+function magnifier() {
+  return (
+    '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<circle cx="42" cy="42" r="30" fill="none" stroke="#E8C468" stroke-width="9"/>' +
+    '<circle cx="42" cy="42" r="30" fill="none" stroke="#0A1226" stroke-width="3"/>' +
+    '<circle cx="34" cy="34" r="14" fill="#FFFFFF" opacity="0.18"/>' +
+    '<line x1="64" y1="64" x2="90" y2="90" stroke="#0A1226" stroke-width="16" stroke-linecap="round"/>' +
+    '<line x1="64" y1="64" x2="90" y2="90" stroke="#E8C468" stroke-width="9" stroke-linecap="round"/>' +
+    '</svg>'
+  );
+}
+
+function gear() {
+  const teeth = 8;
+  let path = '';
+  for (let i = 0; i < teeth; i += 1) {
+    const a = (i / teeth) * 360;
+    path += `<rect x="46" y="4" width="8" height="16" fill="#E8C468" transform="rotate(${a} 50 50)"/>`;
+  }
+  return (
+    '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    `${path}` +
+    '<circle cx="50" cy="50" r="32" fill="#E8C468" stroke="#0A1226" stroke-width="3"/>' +
+    '<circle cx="50" cy="50" r="14" fill="#0A1226"/>' +
+    '</svg>'
+  );
+}
+
+function stars(level) {
+  const n = Math.min(3, Math.max(1, Number(level) || 1));
+  return `<span class="star">${'★'.repeat(n)}</span>${'☆'.repeat(3 - n)}`;
+}
+
+function popSection(quiz, figureSvg, options = {}) {
+  const { headline = '挑戦者求ム', subhead = 'Dr.マッチ棒からの挑戦状!!', footer = '正解で景品プレゼント!!' } = options;
+  return (
+    '<section class="pop">' +
+    '<header class="band-top">' +
+    `<div class="emblem left">${magnifier()}</div>` +
+    `<div class="emblem right">${gear()}</div>` +
+    `<div class="headline">${outlinedText(headline, {
+      fontSize: 210, strokeWidth: 26, fill: '#E8C468', stroke: '#0A1226', shadow: '#4A1420',
+    })}</div>` +
+    `<div class="subband">${outlinedText(subhead, {
+      fontSize: 130, strokeWidth: 9, fill: '#E8C468', stroke: '#0A1226', shadow: null,
+    })}</div>` +
+    '</header>' +
+    '<main class="body">' +
+    `<p class="question">${escapeHtml(quiz.question)}</p>` +
+    `<div class="figure">${figureSvg}</div>` +
+    `<div class="meta">No.${escapeHtml(quiz.id)}　難易度 ${stars(quiz.difficulty)}</div>` +
+    '</main>' +
+    `<footer class="band-bottom">${outlinedText(footer, {
+      fontSize: 150, strokeWidth: 16, fill: '#FFFDF6', stroke: '#4A1420', shadow: null,
+    })}</footer>` +
+    '</section>'
+  );
+}
+
+function renderQuizPop(quiz, options = {}) {
+  return popSection(quiz, renderMatches(quizMatches(quiz)), options);
+}
+
+function printNote(size) {
+  return (
+    '<div class="note">' +
+    '<h2>印刷のしかた（この案内は印刷されません）</h2>' +
+    `<p>このページは <strong>${escapeHtml(size.name)}（${size.w}×${size.h}mm）</strong> の原寸で作られています。<br>` +
+    'Chrome で <code>Ctrl/⌘ + P</code> → <strong>用紙サイズ</strong>を同じサイズに、' +
+    '<strong>余白</strong>を必ず「<strong>デフォルト</strong>」に、' +
+    '<strong>背景のグラフィック</strong>を<strong>ON</strong>にしてください。<br>' +
+    '余白を「なし」やカスタムに変えると、Chrome は CSS の用紙指定を無視して拡大縮小します。</p>' +
+    '</div>'
+  );
+}
+
+function documentHtml({ title, size, sections, withNote = true }) {
+  const css = POP_CSS;
+  const scale = Math.min(1, PREVIEW_WIDTH_PX / (size.w * MM_TO_PX));
+  const frameW = Math.round(size.w * MM_TO_PX * scale);
+  const frameH = Math.round(size.h * MM_TO_PX * scale);
+  const frames = sections
+    .map(
+      (s) =>
+        `<div class="frame" style="width:${frameW}px;height:${frameH}px">` +
+        `<div class="scaler" style="transform:scale(${scale.toFixed(4)})">${s}</div></div>`
+    )
+    .join('\n');
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<style>
+@page { size: ${size.w}mm ${size.h}mm; margin: 0; }
+:root { --pw: ${size.w}mm; --ph: ${size.h}mm; }
+${css}
+</style>
+</head>
+<body>
+${withNote ? printNote(size) : ''}
+<div class="stage">
+${frames}
+</div>
+</body>
+</html>`;
+}
+
+/**
+ * 大判（poster）を印刷可能な用紙（tile）の格子に分割する。
+ * 隣り合うタイルは overlap mm だけ重ねて出力する（貼り合わせ時の目安・のりしろ）。
+ * 版面がタイル用紙ぴったりの倍数でなくても、最後の行・列は poster の外側に
+ * はみ出した分が白紙になるだけで欠けは生じない。
+ */
+function computeTileGrid(posterW, posterH, tileW, tileH, overlap) {
+  if (!(overlap >= 0)) throw new Error(`tile overlap must be >= 0: ${overlap}`);
+  if (tileW <= overlap || tileH <= overlap) {
+    throw new Error(`tile overlap (${overlap}mm) must be smaller than the tile size (${tileW}x${tileH}mm)`);
+  }
+  const stepX = tileW - overlap;
+  const stepY = tileH - overlap;
+  const cols = posterW <= tileW ? 1 : Math.ceil((posterW - tileW) / stepX) + 1;
+  const rows = posterH <= tileH ? 1 : Math.ceil((posterH - tileH) / stepY) + 1;
+  return { cols, rows, stepX, stepY };
+}
+
+function tileGuideNote(size, tileSize, cols, rows, overlap) {
+  const total = cols * rows;
+  return (
+    '<div class="note">' +
+    '<h2>分割印刷のしかた（この案内は印刷されません）</h2>' +
+    `<p>この版面は <strong>${escapeHtml(size.name)}（${size.w}×${size.h}mm）</strong> ですが、` +
+    `<strong>${escapeHtml(tileSize.name)}（${tileSize.w}×${tileSize.h}mm）</strong> 用紙` +
+    `<strong>${rows}行×${cols}列＝${total}枚</strong>に分割してあります。<br>` +
+    'Chrome で <code>Ctrl/⌘ + P</code> → <strong>用紙サイズ</strong>を' +
+    `<strong>${escapeHtml(tileSize.name)}</strong>に、<strong>余白</strong>を「<strong>デフォルト</strong>」に、` +
+    '<strong>背景のグラフィック</strong>を<strong>ON</strong>にしてください。<br>' +
+    `各シート左上の番号（行・列）を見ながら並べ、隣り合うシートどうしを` +
+    `<strong>${overlap}mm重ねて</strong>貼り合わせてから、はみ出した重なり部分を切り揃えてください。</p>` +
+    '</div>'
+  );
+}
+
+/**
+ * 1枚のposter（renderQuizPop等で作った section）を、印刷可能な用紙サイズの
+ * タイル群として出力する。@page はタイル用紙で固定（全ページ同一サイズ）。
+ */
+function tiledDocumentHtml({ title, size, tileSize, overlap = 10, section }) {
+  const css = POP_CSS;
+  const { cols, rows, stepX, stepY } = computeTileGrid(size.w, size.h, tileSize.w, tileSize.h, overlap);
+  const total = cols * rows;
+  const pages = [];
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const n = r * cols + c + 1;
+      const offX = c * stepX;
+      const offY = r * stepY;
+      const label = `${r + 1}行${c + 1}列（${n}/${total}）`;
+      pages.push(
+        `<div class="tile-page" style="width:${tileSize.w}mm;height:${tileSize.h}mm">` +
+        `<div class="tile-canvas" style="left:-${offX}mm;top:-${offY}mm;width:${size.w}mm;height:${size.h}mm">${section}</div>` +
+        `<div class="tile-label">${escapeHtml(label)}</div>` +
+        '</div>'
+      );
+    }
+  }
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<style>
+@page { size: ${tileSize.w}mm ${tileSize.h}mm; margin: 0; }
+:root { --pw: ${size.w}mm; --ph: ${size.h}mm; }
+${css}
+</style>
+</head>
+<body>
+${tileGuideNote(size, tileSize, cols, rows, overlap)}
+<div class="stage">
+${pages.join('\n')}
+</div>
+</body>
+</html>`;
+}
+
+const ANSWER_SHEET_CSS = `
+h1 { font-size: 22px; border-bottom: 4px solid #D8352A; padding-bottom: 8px; }
+.answer { page-break-inside: avoid; break-inside: avoid; margin: 0 0 28px; }
+.answer h2 { font-size: 15px; background:#FFF3D6; padding:8px 12px; border-left:6px solid #F4A81C; margin:0 0 12px; }
+.ans-grid { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; }
+.ans { margin:0; }
+.ans-svg { width: 210px; height: 120px; }
+.ans-svg svg { width:100%; height:100%; }
+.ans figcaption { text-align:center; font-size:13px; font-weight:700; margin-top:6px; }
+.multi { font-size:12px; color:#A81C14; margin:8px 0 0; }
+.ans-legend { font-size:13px; background:#F2F4F7; padding:10px 14px; border-radius:6px; }
+`;
+
+function answerRow(quiz) {
+  const result = solveQuiz(quiz);
+  const from = quizMatches(quiz);
+  const figures = result.solutions
+    .map(
+      (s) =>
+        `<figure class="ans"><div class="ans-svg">${renderSolution(from, s.matches)}</div>` +
+        `<figcaption>${escapeHtml(s.label)}</figcaption></figure>`
+    )
+    .join('');
+  const note = result.solutions.length > 1 ? `<p class="multi">解は ${result.solutions.length} 通りあります。</p>` : '';
+  return (
+    `<article class="answer" id="answer-${escapeHtml(quiz.id)}">` +
+    `<h2>No.${escapeHtml(quiz.id)}　${escapeHtml(quiz.question.replace(/\n/g, ' '))}</h2>` +
+    `<div class="ans-grid"><figure class="ans"><div class="ans-svg">${renderMatches(from)}</div>` +
+    '<figcaption>問題</figcaption></figure>' +
+    figures +
+    `</div>${note}</article>`
+  );
+}
+
+/** 解答一覧の中身（見出し・凡例・各問題のカード）。単体ページにもWeb公開版にも埋め込める。 */
+function answerSectionInner(quizzes) {
+  const rows = quizzes.map(answerRow).join('\n');
+  return (
+    '<h1>マッチ棒クイズ 解答一覧（スタッフ用）</h1>' +
+    '<p class="ans-legend">緑の棒＝移動先／薄いグレー＝もとの位置。' +
+    '複数解がある問題は、どれでも正解としてください。</p>' +
+    rows
+  );
+}
+
+function answerSheetHtml(quizzes) {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>マッチ棒クイズ 解答一覧</title>
+<style>
+@page { size: A4 portrait; margin: 12mm; }
+body { font-family: "Hiragino Sans","Yu Gothic","Meiryo",sans-serif; color:#241505; margin:0; padding:24px; background:#fff; }
+${ANSWER_SHEET_CSS}
+</style>
+</head>
+<body>
+${answerSectionInner(quizzes)}
+</body>
+</html>`;
+}
+
+function indexHtml(entries, size, tileSize = null, hasWeb = false) {
+  const items = entries
+    .map((e) => {
+      const tileLink = e.tilesFile
+        ? `　<a href="${escapeHtml(e.tilesFile)}">分割印刷用（${escapeHtml(tileSize.name)}×複数枚）</a>`
+        : '';
+      return `<li><a href="${escapeHtml(e.file)}">${escapeHtml(e.id)}</a>　${escapeHtml(e.question)}${tileLink}</li>`;
+    })
+    .join('\n');
+  const tileMeta = tileSize
+    ? `<p class="meta">分割印刷: ${escapeHtml(tileSize.name)}（${tileSize.w}×${tileSize.h}mm）用紙に分割した版も各POPに用意しています。</p>`
+    : '';
+  const webLink = hasWeb ? '　|　<a href="web.html">Web公開用の1ページ版</a>' : '';
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>マッチ棒クイズPOP 一覧</title>
+<style>
+body { font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; max-width:760px; margin:40px auto; padding:0 20px; color:#241505; line-height:1.9; }
+h1 { border-bottom:4px solid #D8352A; padding-bottom:8px; }
+li { margin-bottom:6px; }
+a { color:#A8500C; font-weight:700; }
+.meta { color:#666; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>マッチ棒クイズPOP</h1>
+<p class="meta">用紙サイズ: ${escapeHtml(size.name)}（${size.w}×${size.h}mm）／全 ${entries.length} 枚</p>
+${tileMeta}
+<ul>
+${items}
+</ul>
+<p><a href="all.html">全ページまとめて印刷</a>　|　<a href="answers.html">解答一覧（スタッフ用）</a>${webLink}</p>
+</body>
+</html>`;
+}
+
+const WEB_CSS = `
+:root { --web-bg:#3A3F4B; --web-card:#22262F; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--web-bg); font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif; color:#1B1206; }
+.web-nav {
+  position: sticky; top: 0; z-index: 10; display:flex; flex-wrap:wrap; gap:8px;
+  padding: 14px 20px; background: var(--web-card); box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+.web-nav a { color:#E8C468; text-decoration:none; font-size:13px; font-weight:700; padding:4px 10px; border:1px solid #E8C468; border-radius:999px; }
+.web-nav a:hover { background:#E8C468; color:#0A1226; }
+.web-intro { max-width: 760px; margin: 24px auto 0; padding: 0 20px; color:#EDEBE3; font-size:14px; line-height:1.9; text-align:center; }
+.web-section { max-width: 900px; margin: 0 auto; padding: 28px 20px 8px; scroll-margin-top: 64px; }
+.web-frame {
+  width: 100%; position: relative; overflow: hidden; border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4); background:#fff;
+}
+.web-answers { max-width: 900px; margin: 24px auto 60px; background:#FFFDF6; padding: 24px 28px; border-radius: 10px; }
+`;
+
+const FIT_FRAMES_SCRIPT = `
+(function () {
+  function fit() {
+    document.querySelectorAll('.web-frame[data-pw]').forEach(function (frame) {
+      var pw = Number(frame.dataset.pw);
+      var ph = Number(frame.dataset.ph);
+      var scale = frame.clientWidth / pw;
+      frame.style.height = Math.round(ph * scale) + 'px';
+      var scaler = frame.querySelector('.scaler');
+      if (scaler) scaler.style.transform = 'scale(' + scale + ')';
+    });
+  }
+  window.addEventListener('resize', fit);
+  document.addEventListener('DOMContentLoaded', fit);
+  window.addEventListener('load', fit);
+})();
+`;
+
+/**
+ * Web公開用の1ページ版の中身（style/nav/各POP/解答一覧）。
+ * <!DOCTYPE>/<html>/<head>/<body> は含まない — CLI用の webPageHtml と、
+ * それ以外の場所（例: 静的ホスティング用に別途包む場合）の両方から使い回せるようにするため。
+ */
+function webContent({ size, quizzes }) {
+  const css = POP_CSS;
+  const scale = Math.min(1, PREVIEW_WIDTH_PX / (size.w * MM_TO_PX));
+  const pwPx = Math.round(size.w * MM_TO_PX * scale);
+  const phPx = Math.round(size.h * MM_TO_PX * scale);
+
+  const nav = quizzes.map((q) => `<a href="#quiz-${escapeHtml(q.id)}">${escapeHtml(q.id)}</a>`).join('\n');
+  const sections = quizzes
+    .map(
+      (q) =>
+        `<section class="web-section" id="quiz-${escapeHtml(q.id)}">` +
+        `<div class="web-frame" data-pw="${pwPx}" data-ph="${phPx}" style="max-width:${pwPx}px">` +
+        `<div class="scaler" style="transform-origin:top left">${renderQuizPop(q)}</div>` +
+        '</div></section>'
+    )
+    .join('\n');
+
+  return (
+    '<title>マッチ棒クイズPOP</title>\n' +
+    `<style>:root { --pw: ${pwPx}px; --ph: ${phPx}px; }\n${css}\n${WEB_CSS}</style>\n` +
+    '<nav class="web-nav">\n' + nav + '\n</nav>\n' +
+    '<p class="web-intro">画面の幅に合わせて表示しています。印刷する場合は、各POPを開いて' +
+    ' ⌘/Ctrl+P から用紙サイズ・余白「デフォルト」・背景のグラフィックONで出力してください。</p>\n' +
+    sections + '\n' +
+    `<div class="web-answers">${answerSectionInner(quizzes)}</div>\n` +
+    `<script>${FIT_FRAMES_SCRIPT}<\/script>`
+  );
+}
+
+function webPageHtml({ title, size, quizzes }) {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+</head>
+<body>
+${webContent({ size, quizzes })}
+</body>
+</html>`;
+}
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var quizList = $('quizList');
+  var output = $('output');
+  var statusEl = $('status');
+
+  var SIZE_NAMES = Object.keys(PAGE_SIZES);
+
+  function sizeOptionsHtml(selected) {
+    var opts = SIZE_NAMES.map(function (n) {
+      var wh = PAGE_SIZES[n];
+      var sel = n === selected ? ' selected' : '';
+      return '<option value="' + n + '"' + sel + '>' + n + '（' + wh[0] + '×' + wh[1] + 'mm）</option>';
+    });
+    opts.push('<option value="CUSTOM"' + (selected === 'CUSTOM' ? ' selected' : '') + '>カスタム（mmで指定）</option>');
+    return opts.join('\n');
+  }
+
+  function buildQuizList() {
+    quizList.innerHTML = EMBEDDED_QUIZZES.map(function (q) {
+      var label = escapeHtml(q.id) + '　' + escapeHtml(q.question.replace(/\n/g, ' ')) + '（' + q.moves + '本）';
+      return '<label><input type="checkbox" value="' + escapeHtml(q.id) + '" checked> ' + label + '</label>';
+    }).join('\n');
+  }
+
+  function selectedQuizIds() {
+    return Array.prototype.slice.call(quizList.querySelectorAll('input:checked')).map(function (c) { return c.value; });
+  }
+
+  function selectedQuizzes() {
+    var ids = selectedQuizIds();
+    return EMBEDDED_QUIZZES.filter(function (q) { return ids.indexOf(q.id) !== -1; });
+  }
+
+  function pickSize(presetEl, wEl, hEl) {
+    var preset = presetEl.value;
+    if (preset === 'CUSTOM') {
+      var w = wEl.value, h = hEl.value;
+      if (!w || !h) throw new Error('カスタムサイズは幅と高さの両方を入力してください。');
+      return resolveSize(w + 'x' + h);
+    }
+    return resolveSize(preset);
+  }
+
+  function toggleCustom(presetEl, boxEl) {
+    boxEl.style.display = presetEl.value === 'CUSTOM' ? 'flex' : 'none';
+  }
+
+  function fitFrames(root) {
+    var frames = (root || document).querySelectorAll('.web-frame[data-pw]');
+    Array.prototype.forEach.call(frames, function (frame) {
+      var pw = Number(frame.dataset.pw);
+      var ph = Number(frame.dataset.ph);
+      var scale = frame.clientWidth / pw;
+      frame.style.height = Math.round(ph * scale) + 'px';
+      var scaler = frame.querySelector('.scaler');
+      if (scaler) scaler.style.transform = 'scale(' + scale + ')';
+    });
+  }
+
+  function downloadBlob(filename, html) {
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function openInNewTab(html) {
+    // window.open(''）はポップアップブロックの対象になりやすい。
+    // Blob URLへの実リンククリックはブラウザの通常のナビゲーションとして扱われ、
+    // ポップアップブロッカーの影響を受けにくい。
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+
+  function showError(message) {
+    statusEl.innerHTML = '<div class="error-box">' + escapeHtml(message) + '</div>';
+  }
+
+  function showStatus(message) {
+    statusEl.textContent = message;
+  }
+
+  function currentTileSize(size) {
+    if (!$('tileEnabled').checked) return null;
+    var tileSize = pickSize($('tilePreset'), $('tileW'), $('tileH'));
+    if (tileSize.w >= size.w && tileSize.h >= size.h) {
+      throw new Error('分割する用紙（' + tileSize.name + '）は版面サイズ（' + size.name + '）より小さくしてください。');
+    }
+    return tileSize;
+  }
+
+  function renderPreview() {
+    try {
+      var size = pickSize($('sizePreset'), $('sizeW'), $('sizeH'));
+      var tileSize = currentTileSize(size);
+      var quizzes = selectedQuizzes();
+      if (quizzes.length === 0) throw new Error('出力する問題を1つ以上選んでください。');
+
+      var scale = Math.min(1, PREVIEW_WIDTH_PX / (size.w * MM_TO_PX));
+      var pwPx = Math.round(size.w * MM_TO_PX * scale);
+      var phPx = Math.round(size.h * MM_TO_PX * scale);
+
+      var blocks = quizzes.map(function (q) {
+        var tileBtn = tileSize
+          ? '<button type="button" class="tile-btn" data-id="' + escapeHtml(q.id) + '">🧩 分割印刷版を開く</button>'
+          : '';
+        return (
+          '<div class="quiz-block">' +
+          '<div class="web-frame" data-pw="' + pwPx + '" data-ph="' + phPx + '" style="max-width:' + pwPx + 'px">' +
+          '<div class="scaler" style="transform-origin:top left">' + renderQuizPop(q) + '</div>' +
+          '</div>' +
+          '<div class="per-quiz-actions">' +
+          '<button type="button" class="print-btn" data-id="' + escapeHtml(q.id) + '">🖨 印刷用ページを開く</button>' +
+          tileBtn +
+          '</div>' +
+          '</div>'
+        );
+      }).join('\n');
+
+      output.innerHTML = '<style>:root{--pw:' + pwPx + 'px;--ph:' + phPx + 'px;}' + POP_CSS + '\n' + WEB_CSS + '</style>' + blocks;
+      fitFrames(output);
+      window.onresize = function () { fitFrames(output); };
+
+      showStatus(quizzes.length + '問を' + size.name + '（' + size.w + '×' + size.h + 'mm）でプレビューしました。');
+    } catch (err) {
+      output.innerHTML = '<p class="empty-hint">' + escapeHtml(err.message) + '</p>';
+      showError(err.message);
+    }
+  }
+
+  output.addEventListener('click', function (ev) {
+    var printBtn = ev.target.closest ? ev.target.closest('.print-btn') : null;
+    var tileBtn = ev.target.closest ? ev.target.closest('.tile-btn') : null;
+    if (printBtn) {
+      var q1 = EMBEDDED_QUIZZES.filter(function (q) { return q.id === printBtn.dataset.id; })[0];
+      var size1 = pickSize($('sizePreset'), $('sizeW'), $('sizeH'));
+      openInNewTab(documentHtml({ title: q1.id + ' マッチ棒クイズPOP', size: size1, sections: [renderQuizPop(q1)] }));
+    }
+    if (tileBtn) {
+      try {
+        var q2 = EMBEDDED_QUIZZES.filter(function (q) { return q.id === tileBtn.dataset.id; })[0];
+        var size2 = pickSize($('sizePreset'), $('sizeW'), $('sizeH'));
+        var tileSize2 = currentTileSize(size2);
+        var overlap = Number($('tileOverlap').value || 10);
+        openInNewTab(tiledDocumentHtml({
+          title: q2.id + ' マッチ棒クイズPOP（分割印刷）', size: size2, tileSize: tileSize2, overlap: overlap,
+          section: renderQuizPop(q2),
+        }));
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+  });
+
+  $('selectAllBtn').addEventListener('click', function () {
+    Array.prototype.forEach.call(quizList.querySelectorAll('input'), function (c) { c.checked = true; });
+  });
+  $('selectNoneBtn').addEventListener('click', function () {
+    Array.prototype.forEach.call(quizList.querySelectorAll('input'), function (c) { c.checked = false; });
+  });
+
+  $('sizePreset').addEventListener('change', function () { toggleCustom($('sizePreset'), $('sizeCustomBox')); });
+  $('tilePreset').addEventListener('change', function () { toggleCustom($('tilePreset'), $('tileCustomBox')); });
+  $('tileEnabled').addEventListener('change', function () {
+    $('tileOptions').style.display = $('tileEnabled').checked ? 'block' : 'none';
+  });
+
+  $('renderBtn').addEventListener('click', renderPreview);
+
+  $('downloadAllBtn').addEventListener('click', function () {
+    try {
+      var size = pickSize($('sizePreset'), $('sizeW'), $('sizeH'));
+      var quizzes = selectedQuizzes();
+      if (quizzes.length === 0) throw new Error('出力する問題を1つ以上選んでください。');
+      var html = documentHtml({ title: 'マッチ棒クイズPOP 全ページ', size: size, sections: quizzes.map(renderQuizPop) });
+      downloadBlob('all.html', html);
+      showStatus('all.html を保存しました（' + quizzes.length + '問）。');
+    } catch (err) { showError(err.message); }
+  });
+
+  $('downloadWebBtn').addEventListener('click', function () {
+    try {
+      var size = pickSize($('sizePreset'), $('sizeW'), $('sizeH'));
+      var quizzes = selectedQuizzes();
+      if (quizzes.length === 0) throw new Error('出力する問題を1つ以上選んでください。');
+      var html = webPageHtml({ title: 'マッチ棒クイズPOP', size: size, quizzes: quizzes });
+      downloadBlob('web.html', html);
+      showStatus('web.html を保存しました（他のサーバーにアップロードして公開できます）。');
+    } catch (err) { showError(err.message); }
+  });
+
+  $('downloadAnswersBtn').addEventListener('click', function () {
+    try {
+      var quizzes = selectedQuizzes();
+      if (quizzes.length === 0) throw new Error('出力する問題を1つ以上選んでください。');
+      downloadBlob('answers.html', answerSheetHtml(quizzes));
+      showStatus('answers.html（解答一覧）を保存しました。');
+    } catch (err) { showError(err.message); }
+  });
+
+  buildQuizList();
+  $('sizePreset').innerHTML = sizeOptionsHtml('A3');
+  $('tilePreset').innerHTML = sizeOptionsHtml('A3');
+  renderPreview();
+})();
+
+</script>
+</body>
+</html>

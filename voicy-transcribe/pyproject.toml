@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF", "DTZ"]
+ignore = [
+    "B008",   # FastAPI File()/Form() のデフォルト引数呼び出しはFastAPIの標準パターン
+    "DTZ005", # 出力ファイル名はユーザー向けにローカル時刻を使う意図的な設計
+    "RUF001", # 日本語コメント・docstring中の全角記号を誤検出するため無効化
+    "RUF002",
+    "RUF003",
+    "UP045",  # target-version=py39のため typing.Optional を統一して使用する
+]

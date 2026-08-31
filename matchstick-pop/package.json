@@ -1,0 +1,16 @@
+{
+  "name": "matchstick-pop",
+  "version": "1.0.0",
+  "description": "マッチ棒クイズのPOP（A4〜A1可変）を問題データから生成する。解の存在はソルバーで自動検証する。",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node src/index.js",
+    "check": "node src/index.js --check",
+    "gui": "node src/gui-server.js",
+    "standalone": "node scripts/build-standalone.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:e2e": "node --test \"tests/e2e/*.test.js\""
+  }
+}

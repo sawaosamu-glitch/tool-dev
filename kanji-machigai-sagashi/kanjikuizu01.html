@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>漢字まちがい探しジェネレーター</title>
+<style>
+  :root{
+    --panel-bg:#ffffff;
+    --panel-border:#e2e5ea;
+    --accent:#3d7bff;
+    --text:#26292e;
+    --muted:#7a8190;
+    --bg:#f4f6fa;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    min-height:100vh;
+  }
+  #panel{
+    width:360px;
+    flex:0 0 360px;
+    background:var(--panel-bg);
+    border-right:1px solid var(--panel-border);
+    padding:24px 22px 40px;
+    overflow-y:auto;
+    height:100vh;
+  }
+  #panel h1{
+    font-size:18px;
+    margin:0 0 4px;
+  }
+  #panel .sub{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:20px;
+  }
+  fieldset{
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    margin-bottom:16px;
+    padding:12px 14px 16px;
+  }
+  legend{
+    font-size:12px;
+    font-weight:700;
+    color:var(--accent);
+    padding:0 6px;
+  }
+  label{
+    display:block;
+    font-size:12px;
+    color:var(--muted);
+    margin:10px 0 4px;
+  }
+  label:first-of-type{margin-top:0;}
+  input[type="text"], input[type="number"], select{
+    width:100%;
+    padding:7px 9px;
+    border:1px solid var(--panel-border);
+    border-radius:6px;
+    font-size:13px;
+    font-family:inherit;
+    background:#fbfcfe;
+  }
+  .row2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .row3{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:10px;
+  }
+  input[type="color"]{
+    width:100%;
+    height:32px;
+    padding:2px;
+    border:1px solid var(--panel-border);
+    border-radius:6px;
+    background:#fbfcfe;
+  }
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:10px;
+    font-size:12px;
+    color:var(--text);
+  }
+  .checkbox-row input{width:auto;}
+  button{
+    width:100%;
+    padding:11px;
+    border:none;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    margin-top:8px;
+  }
+  #shuffleBtn{
+    background:var(--accent);
+    color:#fff;
+  }
+  #shuffleBtn:hover{background:#2f68e0;}
+  #downloadBtn{
+    background:#1f9d55;
+    color:#fff;
+  }
+  #downloadBtn:hover{background:#188044;}
+  #answerBtn{
+    background:#fff;
+    color:var(--accent);
+    border:1px solid var(--accent);
+  }
+  #answerBtn:hover{background:#eef3ff;}
+  #status{
+    margin-top:14px;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+  #status b{color:var(--text);}
+  #main{
+    flex:1;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:40px 24px;
+    overflow:auto;
+  }
+  #canvasWrap{
+    box-shadow:0 8px 30px rgba(0,0,0,.12);
+    background:#fff;
+    line-height:0;
+  }
+  canvas{
+    display:block;
+    max-width:min(70vw, 620px);
+    height:auto;
+  }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>漢字まちがい探しジェネレーター</h1>
+  <div class="sub">同じ漢字がずらっと並ぶ中に、違う漢字をこっそり混ぜたポスター（バナー）を作成します。</div>
+
+  <fieldset>
+    <legend>文字設定</legend>
+    <label>正解の漢字（1文字）</label>
+    <input type="text" id="correctChar" value="猫" maxlength="2">
+    <label>まぎらわしい漢字（1文字）</label>
+    <input type="text" id="wrongChar" value="描" maxlength="2">
+    <label>まぎらわしい漢字を混ぜる個数</label>
+    <input type="number" id="wrongCount" value="3" min="1" max="20">
+  </fieldset>
+
+  <fieldset>
+    <legend>レイアウト</legend>
+    <div class="row2">
+      <div>
+        <label>行数</label>
+        <input type="number" id="rows" value="9" min="2" max="30">
+      </div>
+      <div>
+        <label>列数</label>
+        <input type="number" id="cols" value="8" min="2" max="20">
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>出力サイズ（最大A0対応）</legend>
+    <div class="row2">
+      <div>
+        <label>用紙サイズ</label>
+        <select id="paperSize">
+          <option value="A4">A4</option>
+          <option value="A3">A3</option>
+          <option value="A2">A2</option>
+          <option value="A1">A1</option>
+          <option value="A0" selected>A0（最大）</option>
+          <option value="custom">カスタム(px指定)</option>
+        </select>
+      </div>
+      <div>
+        <label>向き</label>
+        <select id="orientation">
+          <option value="portrait" selected>縦</option>
+          <option value="landscape">横</option>
+        </select>
+      </div>
+    </div>
+    <label>解像度</label>
+    <select id="dpi">
+      <option value="72">72dpi（画面確認用・軽量）</option>
+      <option value="150" selected>150dpi（バナー印刷の標準）</option>
+      <option value="300">300dpi（高精細・データが大きい）</option>
+    </select>
+    <div class="row2" id="customSizeRow" style="display:none;">
+      <div>
+        <label>画像の幅(px)</label>
+        <input type="number" id="canvasW" value="700" min="300" max="12000" step="10">
+      </div>
+      <div>
+        <label>画像の高さ(px)</label>
+        <input type="number" id="canvasH" value="1500" min="300" max="16000" step="10">
+      </div>
+    </div>
+    <div id="sizeInfo" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
+  </fieldset>
+
+  <fieldset id="tileFieldset">
+    <legend>分割印刷（タイル出力）</legend>
+    <div class="row2">
+      <div>
+        <label>分割する用紙サイズ</label>
+        <select id="tilePaper">
+          <option value="A4">A4</option>
+          <option value="A3" selected>A3</option>
+          <option value="A2">A2</option>
+          <option value="A1">A1</option>
+        </select>
+      </div>
+      <div>
+        <label>のりしろ(mm)</label>
+        <input type="number" id="tileOverlap" value="10" min="0" max="50" step="1">
+      </div>
+    </div>
+    <div id="tileInfo" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
+    <div id="tileUnavailable" style="font-size:12px;color:var(--muted);margin-top:8px;display:none;">
+      分割印刷は用紙サイズが「カスタム」以外の場合に利用できます。
+    </div>
+    <button id="tileDownloadBtn" style="background:#fff;color:var(--accent);border:1px solid var(--accent);">🧩 分割印刷用ZIPをダウンロード</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>テキスト</legend>
+    <label>タイトル（上段・太字）</label>
+    <input type="text" id="titleMain" value="漢字">
+    <label>タイトル（上段・続き）</label>
+    <input type="text" id="titleSub" value="間違い探し">
+    <label>サブタイトル</label>
+    <input type="text" id="subtitle" value="違う漢字は何個ある？">
+    <label>フッター（下段の案内文）</label>
+    <input type="text" id="footer" value="正解で景品プレゼント！スタッフに声をかけてね！">
+  </fieldset>
+
+  <fieldset>
+    <legend>デザイン</legend>
+    <div class="row3">
+      <div>
+        <label>背景色</label>
+        <input type="color" id="bgColor" value="#eaf6fb">
+      </div>
+      <div>
+        <label>グリッド背景</label>
+        <input type="color" id="gridBg" value="#ffffff">
+      </div>
+      <div>
+        <label>フッター背景</label>
+        <input type="color" id="footerBg" value="#3fae5a">
+      </div>
+    </div>
+    <label>文字色</label>
+    <select id="charColorMode">
+      <option value="rainbow" selected>レインボー（行ごとに色を変える）</option>
+      <option value="black">黒</option>
+      <option value="red">赤</option>
+    </select>
+  </fieldset>
+
+  <button id="shuffleBtn">🔀 配置をシャッフルして再生成</button>
+  <button id="downloadBtn">⬇️ PNGをダウンロード（問題）</button>
+  <button id="answerBtn">🔎 解答付きPNGをダウンロード</button>
+
+  <div id="status"></div>
+</div>
+
+<div id="main">
+  <div id="canvasWrap">
+    <canvas id="canvas" width="700" height="1500"></canvas>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+const RAINBOW = ['#ff8a3d','#ffcb2b','#7ac943','#2bc4b0','#3d9bff','#8c6bff','#ff5fa2','#ff5f5f'];
+const FONT_FAMILY = '"Hiragino Maru Gothic ProN","Rounded Mplus 1c","Hiragino Sans",sans-serif';
+
+const PAPER_MM = {
+  A4: [210, 297],
+  A3: [297, 420],
+  A2: [420, 594],
+  A1: [594, 841],
+  A0: [841, 1189],
+};
+
+let state = null; // { rows, cols, wrongPositions:Set(index) }
+
+function computeCanvasSize(){
+  const paper = $('paperSize').value;
+  if(paper === 'custom'){
+    return {
+      w: Math.max(300, parseInt($('canvasW').value || '700', 10)),
+      h: Math.max(300, parseInt($('canvasH').value || '1500', 10)),
+      custom: true,
+    };
+  }
+  const dpi = parseInt($('dpi').value, 10);
+  let [mmW, mmH] = PAPER_MM[paper];
+  if($('orientation').value === 'landscape'){ [mmW, mmH] = [mmH, mmW]; }
+  return {
+    w: Math.round(mmW / 25.4 * dpi),
+    h: Math.round(mmH / 25.4 * dpi),
+    mmW, mmH, dpi,
+  };
+}
+
+function updateSizeUI(){
+  const isCustom = $('paperSize').value === 'custom';
+  $('customSizeRow').style.display = isCustom ? 'grid' : 'none';
+  const size = computeCanvasSize();
+  let info = `出力サイズ: ${size.w} × ${size.h} px`;
+  if(!isCustom){
+    info += `（${size.mmW}×${size.mmH}mm / ${size.dpi}dpi）`;
+  }
+  const mp = (size.w * size.h / 1e6).toFixed(1);
+  info += `<br>合計 約${mp}MP`;
+  if(size.w * size.h > 60000000){
+    info += '<br>※サイズが大きいため生成・ダウンロードに時間がかかる場合があります。';
+  }
+  $('sizeInfo').innerHTML = info;
+}
+
+function readConfig(){
+  const size = computeCanvasSize();
+  return {
+    correctChar: ($('correctChar').value || '猫').trim().slice(0,1),
+    wrongChar: ($('wrongChar').value || '描').trim().slice(0,1),
+    wrongCount: Math.max(1, parseInt($('wrongCount').value || '3', 10)),
+    rows: Math.max(2, parseInt($('rows').value || '9', 10)),
+    cols: Math.max(2, parseInt($('cols').value || '8', 10)),
+    w: size.w,
+    h: size.h,
+    titleMain: $('titleMain').value || '漢字',
+    titleSub: $('titleSub').value || '間違い探し',
+    subtitle: $('subtitle').value || '',
+    footer: $('footer').value || '',
+    bgColor: $('bgColor').value,
+    gridBg: $('gridBg').value,
+    footerBg: $('footerBg').value,
+    charColorMode: $('charColorMode').value,
+  };
+}
+
+function generatePositions(rows, cols, wrongCount){
+  const total = rows * cols;
+  const count = Math.min(wrongCount, total - 1);
+  const positions = new Set();
+  if(count <= 0) return { positions, total, count: 0 };
+
+  // Split the grid into `count` roughly even spatial blocks (row x col bands)
+  // so wrong characters spread across the whole poster instead of clumping
+  // together, then pick one cell per block while avoiding neighbors that
+  // already have a wrong character (8-direction adjacency) for a clean look.
+  let bRows = Math.min(rows, Math.max(1, Math.round(Math.sqrt(count * rows / cols))));
+  let bCols = Math.min(cols, Math.max(1, Math.ceil(count / bRows)));
+  while(bRows * bCols < count){
+    if(bCols < cols) bCols++;
+    else if(bRows < rows) bRows++;
+    else break;
+  }
+
+  const blocks = [];
+  for(let br = 0; br < bRows; br++){
+    for(let bc = 0; bc < bCols; bc++){
+      blocks.push([br, bc]);
+    }
+  }
+  for(let i = blocks.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
+  }
+
+  const chosenCells = [];
+  blocks.slice(0, count).forEach(([br, bc]) => {
+    const r0 = Math.floor(br * rows / bRows), r1 = Math.floor((br + 1) * rows / bRows);
+    const c0 = Math.floor(bc * cols / bCols), c1 = Math.floor((bc + 1) * cols / bCols);
+    let fallback = null;
+    for(let attempt = 0; attempt < 25; attempt++){
+      const r = r0 + Math.floor(Math.random() * Math.max(1, r1 - r0));
+      const c = c0 + Math.floor(Math.random() * Math.max(1, c1 - c0));
+      const i = r * cols + c;
+      if(positions.has(i)) continue;
+      const tooClose = chosenCells.some(cell => Math.abs(cell.r - r) <= 1 && Math.abs(cell.c - c) <= 1);
+      if(!fallback) fallback = { r, c, i };
+      if(!tooClose){ fallback = { r, c, i }; break; }
+    }
+    if(fallback){
+      positions.add(fallback.i);
+      chosenCells.push(fallback);
+    }
+  });
+
+  return { positions, total, count: positions.size };
+}
+
+function roundRectPath(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function draw(cfg, positions, opts){
+  opts = opts || {};
+  const { w, h } = cfg;
+  canvas.width = w;
+  canvas.height = h;
+
+  // background
+  ctx.fillStyle = cfg.bgColor;
+  ctx.fillRect(0, 0, w, h);
+
+  const pad = w * 0.045;
+
+  // ---- title block ----
+  const titleH = h * 0.11;
+  const titleY = pad;
+  roundRectPath(ctx, pad, titleY, w - pad*2, titleH, 18);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#cfe3ee';
+  ctx.stroke();
+
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.floor(titleH*0.5)}px ${FONT_FAMILY}`;
+  const mainText = cfg.titleMain;
+  const subText = cfg.titleSub;
+  ctx.textAlign = 'left';
+  const mainW = ctx.measureText(mainText).width;
+  const gap = titleH * 0.18;
+  ctx.font = `bold ${Math.floor(titleH*0.4)}px ${FONT_FAMILY}`;
+  const subW = ctx.measureText(subText).width;
+  const totalW = mainW + gap + subW;
+  let cx = w/2 - totalW/2;
+  const cy = titleY + titleH*0.42;
+
+  // main pill (pink)
+  ctx.font = `bold ${Math.floor(titleH*0.5)}px ${FONT_FAMILY}`;
+  const mainPadX = titleH*0.22;
+  roundRectPath(ctx, cx - mainPadX, cy - titleH*0.34, mainW + mainPadX*2, titleH*0.62, titleH*0.31);
+  ctx.fillStyle = '#ff6fa5';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText(mainText, cx + mainPadX + mainW/2 - mainPadX, cy);
+
+  // sub pill (teal)
+  cx += mainW + mainPadX*2 + gap;
+  ctx.font = `bold ${Math.floor(titleH*0.4)}px ${FONT_FAMILY}`;
+  const subPadX = titleH*0.16;
+  roundRectPath(ctx, cx - subPadX, cy - titleH*0.28, subW + subPadX*2, titleH*0.52, titleH*0.26);
+  ctx.fillStyle = '#1fb6b0';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(subText, cx - subPadX + subW/2 + subPadX, cy);
+
+  // subtitle line
+  const subtitleY = titleY + titleH + h*0.028;
+  ctx.font = `bold ${Math.floor(w*0.038)}px ${FONT_FAMILY}`;
+  ctx.fillStyle = '#ff6fa5';
+  ctx.textAlign = 'center';
+  ctx.fillText(cfg.subtitle, w/2, subtitleY);
+
+  // ---- grid block ----
+  const footerH = cfg.footer ? h * 0.09 : 0;
+  const gridY = subtitleY + h*0.03;
+  const gridBottom = h - pad - footerH - (cfg.footer ? h*0.02 : 0);
+  const gridH = gridBottom - gridY;
+  const gridW = w - pad*2;
+
+  roundRectPath(ctx, pad, gridY, gridW, gridH, 16);
+  ctx.fillStyle = cfg.gridBg;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#bcd8ea';
+  ctx.stroke();
+
+  const innerPad = gridW * 0.035;
+  const cellW = (gridW - innerPad*2) / cfg.cols;
+  const cellH = (gridH - innerPad*2) / cfg.rows;
+  const fontSize = Math.floor(Math.min(cellW, cellH) * 0.82);
+  ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const answerList = [];
+  for(let r = 0; r < cfg.rows; r++){
+    const rowColor = cfg.charColorMode === 'rainbow' ? RAINBOW[r % RAINBOW.length]
+      : cfg.charColorMode === 'red' ? '#e6332a'
+      : '#1a1a1a';
+    for(let c = 0; c < cfg.cols; c++){
+      const i = r * cfg.cols + c;
+      const isWrong = positions.has(i);
+      const ch = isWrong ? cfg.wrongChar : cfg.correctChar;
+      const x = pad + innerPad + cellW * c + cellW/2;
+      const y = gridY + innerPad + cellH * r + cellH/2;
+
+      ctx.fillStyle = rowColor;
+      ctx.fillText(ch, x, y);
+
+      if(isWrong) answerList.push({r, c, x, y, cellW, cellH});
+    }
+  }
+
+  // answer overlay
+  if(opts.showAnswers){
+    ctx.lineWidth = Math.max(3, fontSize*0.06);
+    ctx.strokeStyle = '#ff2d55';
+    answerList.forEach(a => {
+      const radius = Math.min(a.cellW, a.cellH) * 0.55;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, radius, 0, Math.PI*2);
+      ctx.stroke();
+    });
+    // answer count badge
+    const badgeR = w * 0.045;
+    const bx = w - pad - badgeR - 6;
+    const by = gridY + badgeR + 6;
+    ctx.beginPath();
+    ctx.arc(bx, by, badgeR, 0, Math.PI*2);
+    ctx.fillStyle = '#ff2d55';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.floor(badgeR*0.9)}px ${FONT_FAMILY}`;
+    ctx.fillText(String(answerList.length), bx, by + badgeR*0.05);
+  }
+
+  // ---- footer block ----
+  if(cfg.footer){
+    const fY = h - pad - footerH;
+    roundRectPath(ctx, pad, fY, gridW, footerH, 16);
+    ctx.fillStyle = cfg.footerBg;
+    ctx.fill();
+    ctx.font = `bold ${Math.floor(footerH*0.32)}px ${FONT_FAMILY}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    wrapAndDraw(ctx, cfg.footer, w/2, fY + footerH/2, gridW*0.88, footerH*0.36);
+  }
+
+  return answerList.length;
+}
+
+function wrapAndDraw(ctx, text, cx, cy, maxWidth, lineHeight){
+  const chars = Array.from(text);
+  const lines = [];
+  let line = '';
+  chars.forEach(ch => {
+    const test = line + ch;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  });
+  if(line) lines.push(line);
+  const startY = cy - (lines.length - 1) * lineHeight / 2;
+  lines.forEach((l, i) => ctx.fillText(l, cx, startY + i*lineHeight));
+}
+
+function regenerate(){
+  updateSizeUI();
+  updateTileUI();
+  const cfg = readConfig();
+  const { positions, total, count } = generatePositions(cfg.rows, cfg.cols, cfg.wrongCount);
+  state = { cfg, positions, total, count };
+  draw(cfg, positions, { showAnswers:false });
+  $('status').innerHTML = `マス目: <b>${cfg.rows}行 × ${cfg.cols}列</b>（全${total}マス）<br>まぎらわしい漢字「${cfg.wrongChar}」を <b>${count}個</b> 混ぜました。`;
+}
+
+function handleSizeChange(){
+  updateSizeUI();
+  updateTileUI();
+  if(!state) return regenerate();
+  state.cfg = readConfig();
+  draw(state.cfg, state.positions, { showAnswers:false });
+}
+
+function downloadCanvas(filename){
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+// ---- 分割印刷（タイル出力） ----
+
+function computeTileLayout(){
+  if($('paperSize').value === 'custom') return null;
+  const dpi = parseInt($('dpi').value, 10);
+  let [mmW, mmH] = PAPER_MM[$('paperSize').value];
+  if($('orientation').value === 'landscape'){ [mmW, mmH] = [mmH, mmW]; }
+
+  let [tileMmW, tileMmH] = PAPER_MM[$('tilePaper').value];
+  if($('orientation').value === 'landscape'){ [tileMmW, tileMmH] = [tileMmH, tileMmW]; }
+
+  const overlap = Math.min(Math.min(tileMmW, tileMmH) - 1, Math.max(0, parseFloat($('tileOverlap').value) || 0));
+  const stepXmm = Math.max(1, tileMmW - overlap);
+  const stepYmm = Math.max(1, tileMmH - overlap);
+  const cols = Math.max(1, Math.ceil((mmW - overlap) / stepXmm));
+  const rows = Math.max(1, Math.ceil((mmH - overlap) / stepYmm));
+
+  return {
+    cols, rows, overlap,
+    tileWpx: Math.round(tileMmW / 25.4 * dpi),
+    tileHpx: Math.round(tileMmH / 25.4 * dpi),
+    stepXpx: Math.round(stepXmm / 25.4 * dpi),
+    stepYpx: Math.round(stepYmm / 25.4 * dpi),
+    paperLabel: $('tilePaper').value,
+  };
+}
+
+function updateTileUI(){
+  const isCustom = $('paperSize').value === 'custom';
+  $('tileUnavailable').style.display = isCustom ? 'block' : 'none';
+  $('tileDownloadBtn').style.display = isCustom ? 'none' : 'block';
+  $('tileInfo').style.display = isCustom ? 'none' : 'block';
+  ['tilePaper','tileOverlap'].forEach(id => $(id).disabled = isCustom);
+  if(isCustom){ $('tileInfo').innerHTML=''; return; }
+
+  const t = computeTileLayout();
+  $('tileInfo').innerHTML = `${t.paperLabel}用紙 ${t.cols}列 × ${t.rows}行 ＝ <b>合計${t.cols * t.rows}枚</b> が必要です（のりしろ${t.overlap}mm）`;
+}
+
+function buildTileReadme(t){
+  return [
+    '分割印刷ガイド',
+    `用紙サイズ: ${t.paperLabel}`,
+    `枚数: 横${t.cols}枚 × 縦${t.rows}枚 ＝ 合計${t.cols * t.rows}枚`,
+    `のりしろ: ${t.overlap}mm`,
+    '',
+    '各PNGファイルのファイル名は tile_行-列.png です。',
+    '各シートの左上に「行-列（通し番号/総枚数）」のラベルが印字されています。',
+    '印刷後、番号順に並べ、のりしろ部分を重ねて貼り合わせてください。',
+  ].join('\r\n');
+}
+
+async function downloadTiles(){
+  if($('paperSize').value === 'custom') return;
+  if(!state) regenerate();
+  draw(state.cfg, state.positions, { showAnswers:false });
+
+  const t = computeTileLayout();
+  const btn = $('tileDownloadBtn');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+
+  try{
+    const files = [];
+    const totalTiles = t.rows * t.cols;
+    let done = 0;
+
+    for(let r = 0; r < t.rows; r++){
+      for(let c = 0; c < t.cols; c++){
+        done++;
+        btn.textContent = `生成中... (${done}/${totalTiles})`;
+
+        const sx = c * t.stepXpx;
+        const sy = r * t.stepYpx;
+        const sw = Math.min(t.tileWpx, canvas.width - sx);
+        const sh = Math.min(t.tileHpx, canvas.height - sy);
+
+        const tileCanvas = document.createElement('canvas');
+        tileCanvas.width = sw;
+        tileCanvas.height = sh;
+        const tctx = tileCanvas.getContext('2d');
+        tctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        const label = `${r + 1}-${c + 1}  (${done}/${totalTiles})`;
+        const padPx = Math.max(10, sw * 0.012);
+        tctx.font = `bold ${Math.max(18, Math.floor(sw * 0.022))}px ${FONT_FAMILY}`;
+        const textW = tctx.measureText(label).width;
+        const boxH = Math.max(26, Math.floor(sw * 0.032));
+        tctx.fillStyle = 'rgba(255,255,255,0.88)';
+        tctx.fillRect(padPx * 0.5, padPx * 0.5, textW + padPx * 1.5, boxH);
+        tctx.strokeStyle = '#999';
+        tctx.lineWidth = 1;
+        tctx.strokeRect(padPx * 0.5, padPx * 0.5, textW + padPx * 1.5, boxH);
+        tctx.fillStyle = '#333';
+        tctx.textAlign = 'left';
+        tctx.textBaseline = 'middle';
+        tctx.fillText(label, padPx, padPx * 0.5 + boxH / 2);
+
+        const blob = await new Promise(res => tileCanvas.toBlob(res, 'image/png'));
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        files.push({ name: `tile_${String(r + 1).padStart(2, '0')}-${String(c + 1).padStart(2, '0')}.png`, data: buf });
+      }
+    }
+
+    files.push({ name: 'README.txt', data: strBytes(buildTileReadme(t)) });
+
+    const zipBlob = buildZip(files);
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '漢字まちがい探し_分割印刷.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+// ---- minimal store-only ZIP writer (no external dependency) ----
+
+function strBytes(s){ return new TextEncoder().encode(s); }
+
+const crc32Table = (() => {
+  const table = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++){
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf){
+  let crc = 0xFFFFFFFF;
+  for(let i = 0; i < buf.length; i++){
+    crc = (crc >>> 8) ^ crc32Table[(crc ^ buf[i]) & 0xFF];
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function dosDateTime(date){
+  const time = ((date.getHours() & 0x1F) << 11) | ((date.getMinutes() & 0x3F) << 5) | ((date.getSeconds() >> 1) & 0x1F);
+  const d = (((date.getFullYear() - 1980) & 0x7F) << 9) | (((date.getMonth() + 1) & 0xF) << 5) | (date.getDate() & 0x1F);
+  return { time, d };
+}
+
+function buildZip(files){
+  const UTF8_FLAG = 0x0800;
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const { time, d } = dosDateTime(new Date());
+
+  files.forEach(f => {
+    const nameBytes = strBytes(f.name);
+    const crc = crc32(f.data);
+    const size = f.data.length;
+
+    const localHeader = new Uint8Array(30);
+    const lv = new DataView(localHeader.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, UTF8_FLAG, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, time, true);
+    lv.setUint16(12, d, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, size, true);
+    lv.setUint32(22, size, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    localParts.push(localHeader, nameBytes, f.data);
+
+    const centralHeader = new Uint8Array(46);
+    const cv = new DataView(centralHeader.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, UTF8_FLAG, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, time, true);
+    cv.setUint16(14, d, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, size, true);
+    cv.setUint32(24, size, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    centralParts.push(centralHeader, nameBytes);
+
+    offset += localHeader.length + nameBytes.length + f.data.length;
+  });
+
+  const centralSize = centralParts.reduce((sum, p) => sum + p.length, 0);
+  const centralOffset = offset;
+
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, centralOffset, true);
+  ev.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+}
+
+$('shuffleBtn').addEventListener('click', regenerate);
+
+$('downloadBtn').addEventListener('click', () => {
+  if(!state) regenerate();
+  draw(state.cfg, state.positions, { showAnswers:false });
+  downloadCanvas('漢字まちがい探し_問題.png');
+});
+
+$('answerBtn').addEventListener('click', () => {
+  if(!state) regenerate();
+  draw(state.cfg, state.positions, { showAnswers:true });
+  downloadCanvas('漢字まちがい探し_解答.png');
+  // redraw plain version back to view
+  setTimeout(() => draw(state.cfg, state.positions, { showAnswers:false }), 50);
+});
+
+// live-update on any input change (re-draw with same positions if grid size unchanged)
+['correctChar','wrongChar','titleMain','titleSub','subtitle','footer','bgColor','gridBg','footerBg','charColorMode']
+  .forEach(id => $(id).addEventListener('input', () => {
+    if(!state) return regenerate();
+    const cfg = readConfig();
+    // if rows/cols/wrongCount changed, need new positions -> handled by their own listeners
+    state.cfg = cfg;
+    draw(cfg, state.positions, { showAnswers:false });
+  }));
+
+['paperSize','orientation','dpi','canvasW','canvasH'].forEach(id => $(id).addEventListener('input', handleSizeChange));
+
+['tilePaper','tileOverlap'].forEach(id => $(id).addEventListener('input', updateTileUI));
+$('tileDownloadBtn').addEventListener('click', downloadTiles);
+
+['rows','cols','wrongCount'].forEach(id => $(id).addEventListener('input', regenerate));
+
+regenerate();
+</script>
+</body>
+</html>

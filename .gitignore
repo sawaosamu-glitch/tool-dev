@@ -4,3 +4,25 @@
 .Spotlight-V100
 .Trashes
 Thumbs.db
+
+# dependencies / build artifacts
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.mypy_cache/
+
+# secrets / local machine config
+.env
+.env.*
+**/settings.local.json
+
+# archives (duplicated/bulky, not source)
+*.zip
+
+# scratch/working data
+voicy-transcribe/work/
+
+# sensitive personal files — not for version control
+03_github/
