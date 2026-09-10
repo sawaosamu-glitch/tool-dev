@@ -146,13 +146,59 @@
     max-width:min(70vw, 620px);
     height:auto;
   }
+
+  /* ---- スマホ対応 ---- */
+  @media (max-width: 860px){
+    body{
+      flex-direction:column;
+    }
+    #panel{
+      order:2;
+      width:100%;
+      flex:none;
+      height:auto;
+      max-height:none;
+      border-right:none;
+      border-top:1px solid var(--panel-border);
+      padding:18px 16px 32px;
+    }
+    #main{
+      order:1;
+      width:100%;
+      padding:16px 12px;
+      position:sticky;
+      top:0;
+      background:var(--bg);
+      z-index:1;
+    }
+    #canvasWrap{
+      max-width:100%;
+    }
+    canvas{
+      max-width:100%;
+      max-height:52vh;
+      width:auto;
+    }
+    /* iOSでの入力時自動ズームを防ぐため16px以上に */
+    input[type="text"], input[type="number"], select{
+      font-size:16px;
+      padding:10px 10px;
+    }
+    button{
+      padding:14px;
+      font-size:15px;
+    }
+    .row3{
+      grid-template-columns:1fr 1fr;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div id="panel">
   <h1>漢字まちがい探しジェネレーター</h1>
-  <div class="sub">同じ漢字がずらっと並ぶ中に、違う漢字をこっそり混ぜたポスター（バナー）を作成します。</div>
+  <div class="sub">同じ漢字がずらっと並ぶ中に、違う漢字をこっそり混ぜたポスター（バナー）を作成します。スマホでは上のプレビューを見ながら下の設定を調整できます。</div>
 
   <fieldset>
     <legend>文字設定</legend>
@@ -308,6 +354,33 @@ const PAPER_MM = {
   A0: [841, 1189],
 };
 
+// iOS(WebKit)はcanvasに描画できる総ピクセル数に上限があり(目安16.7MP程度)、
+// それを超えるとエラーにならず「白紙のまま」になる。プレビューは常に軽量な
+// 解像度で描画し、書き出し(ダウンロード)時だけ実際の解像度を使う。
+// iOS書き出し時は安全な上限に自動で縮小し、ユーザーに通知する。
+const PREVIEW_MAX_DIM = 1400;
+const IOS_EXPORT_MAX_AREA = 15000000;
+const IOS_EXPORT_MAX_DIM = 4000;
+
+function fitWithinArea(w, h, maxArea, maxDim){
+  let scale = 1;
+  if(maxDim && Math.max(w, h) > maxDim) scale = Math.min(scale, maxDim / Math.max(w, h));
+  if(maxArea && (w * h * scale * scale) > maxArea) scale = Math.min(scale, Math.sqrt(maxArea / (w * h)));
+  if(scale >= 1) return { w, h, scaled: false };
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)), scaled: true };
+}
+
+function getPreviewCfg(cfg){
+  const fit = fitWithinArea(cfg.w, cfg.h, null, PREVIEW_MAX_DIM);
+  return fit.scaled ? { ...cfg, w: fit.w, h: fit.h } : cfg;
+}
+
+function getExportCfg(cfg){
+  if(!IS_IOS) return { cfg, scaled: false };
+  const fit = fitWithinArea(cfg.w, cfg.h, IOS_EXPORT_MAX_AREA, IOS_EXPORT_MAX_DIM);
+  return fit.scaled ? { cfg: { ...cfg, w: fit.w, h: fit.h }, scaled: true } : { cfg, scaled: false };
+}
+
 let state = null; // { rows, cols, wrongPositions:Set(index) }
 
 function computeCanvasSize(){
@@ -431,8 +504,13 @@ function roundRectPath(ctx, x, y, w, h, r){
 function draw(cfg, positions, opts){
   opts = opts || {};
   const { w, h } = cfg;
-  canvas.width = w;
-  canvas.height = h;
+  const targetCanvas = opts.canvas || canvas;
+  const ctx = targetCanvas.getContext('2d'); // shadows the outer preview ctx on purpose
+  const clip = opts.clip || { x: 0, y: 0, w, h };
+  targetCanvas.width = clip.w;
+  targetCanvas.height = clip.h;
+  ctx.save();
+  ctx.translate(-clip.x, -clip.y);
 
   // background
   ctx.fillStyle = cfg.bgColor;
@@ -567,6 +645,7 @@ function draw(cfg, positions, opts){
     wrapAndDraw(ctx, cfg.footer, w/2, fY + footerH/2, gridW*0.88, footerH*0.36);
   }
 
+  ctx.restore();
   return answerList.length;
 }
 
@@ -588,13 +667,20 @@ function wrapAndDraw(ctx, text, cx, cy, maxWidth, lineHeight){
   lines.forEach((l, i) => ctx.fillText(l, cx, startY + i*lineHeight));
 }
 
+// 画面プレビューは常にPREVIEW_MAX_DIM以下の軽量な解像度で描画する。
+// (A0/300dpi等の巨大な設定でも、画面表示用にcanvasへ数千万px描画すると
+// iOSのSafari/WebKitでは白紙になってしまうため)
+function drawPreview(showAnswers){
+  draw(getPreviewCfg(state.cfg), state.positions, { showAnswers });
+}
+
 function regenerate(){
   updateSizeUI();
   updateTileUI();
   const cfg = readConfig();
   const { positions, total, count } = generatePositions(cfg.rows, cfg.cols, cfg.wrongCount);
   state = { cfg, positions, total, count };
-  draw(cfg, positions, { showAnswers:false });
+  drawPreview(false);
   $('status').innerHTML = `マス目: <b>${cfg.rows}行 × ${cfg.cols}列</b>（全${total}マス）<br>まぎらわしい漢字「${cfg.wrongChar}」を <b>${count}個</b> 混ぜました。`;
 }
 
@@ -603,19 +689,47 @@ function handleSizeChange(){
   updateTileUI();
   if(!state) return regenerate();
   state.cfg = readConfig();
-  draw(state.cfg, state.positions, { showAnswers:false });
+  drawPreview(false);
 }
 
-function downloadCanvas(filename){
-  canvas.toBlob(blob => {
-    const url = URL.createObjectURL(blob);
+// iPhone(Safari/Chromeともに中身はWebKit)は <a download> のクリックを
+// 無視することがあるため、対応状況に応じて保存方法を切り替える。
+// 1) Web Share APIでファイル共有できるなら共有シート経由で保存させる
+// 2) iOSで共有APIが無ければ新規タブで開いて長押し保存してもらう
+// 3) それ以外(PC等)は従来どおり <a download> で即ダウンロード
+const IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+async function saveBlob(blob, filename){
+  const file = new File([blob], filename, { type: blob.type });
+  if(navigator.canShare && navigator.canShare({ files: [file] })){
+    try{
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }catch(err){
+      if(err && err.name === 'AbortError') return; // ユーザーがキャンセル
+      // 共有に失敗した場合は下のフォールバックへ
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  if(IS_IOS){
+    window.open(url, '_blank');
+    alert('画像が新しいタブで開きます。画像を長押しして「写真に保存」または「"ファイル"に保存」を選んでください。');
+  } else {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function downloadCanvas(filename){
+  canvas.toBlob(blob => {
+    if(!blob) return;
+    saveBlob(blob, filename);
   }, 'image/png');
 }
 
@@ -655,7 +769,11 @@ function updateTileUI(){
   if(isCustom){ $('tileInfo').innerHTML=''; return; }
 
   const t = computeTileLayout();
-  $('tileInfo').innerHTML = `${t.paperLabel}用紙 ${t.cols}列 × ${t.rows}行 ＝ <b>合計${t.cols * t.rows}枚</b> が必要です（のりしろ${t.overlap}mm）`;
+  let info = `${t.paperLabel}用紙 ${t.cols}列 × ${t.rows}行 ＝ <b>合計${t.cols * t.rows}枚</b> が必要です（のりしろ${t.overlap}mm）`;
+  if(IS_IOS && t.tileWpx * t.tileHpx > IOS_EXPORT_MAX_AREA){
+    info += '<br>※この組み合わせは1枚あたりの解像度が高く、iPhone/iPadでは生成に失敗する場合があります。解像度を下げるか、分割する用紙サイズを小さくしてください。';
+  }
+  $('tileInfo').innerHTML = info;
 }
 
 function buildTileReadme(t){
@@ -674,7 +792,6 @@ function buildTileReadme(t){
 async function downloadTiles(){
   if($('paperSize').value === 'custom') return;
   if(!state) regenerate();
-  draw(state.cfg, state.positions, { showAnswers:false });
 
   const t = computeTileLayout();
   const btn = $('tileDownloadBtn');
@@ -693,14 +810,18 @@ async function downloadTiles(){
 
         const sx = c * t.stepXpx;
         const sy = r * t.stepYpx;
-        const sw = Math.min(t.tileWpx, canvas.width - sx);
-        const sh = Math.min(t.tileHpx, canvas.height - sy);
+        const sw = Math.min(t.tileWpx, state.cfg.w - sx);
+        const sh = Math.min(t.tileHpx, state.cfg.h - sy);
 
+        // 各タイルは巨大なマスターcanvasを経由せず、その領域だけを直接
+        // 小さいcanvasへ描き直す(iOSのcanvasピクセル上限を回避するため)。
         const tileCanvas = document.createElement('canvas');
-        tileCanvas.width = sw;
-        tileCanvas.height = sh;
+        draw(state.cfg, state.positions, {
+          showAnswers: false,
+          canvas: tileCanvas,
+          clip: { x: sx, y: sy, w: sw, h: sh },
+        });
         const tctx = tileCanvas.getContext('2d');
-        tctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
         const label = `${r + 1}-${c + 1}  (${done}/${totalTiles})`;
         const padPx = Math.max(10, sw * 0.012);
@@ -726,14 +847,7 @@ async function downloadTiles(){
     files.push({ name: 'README.txt', data: strBytes(buildTileReadme(t)) });
 
     const zipBlob = buildZip(files);
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '漢字まちがい探し_分割印刷.zip';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    await saveBlob(zipBlob, '漢字まちがい探し_分割印刷.zip');
   } finally {
     btn.disabled = false;
     btn.textContent = originalLabel;
@@ -840,18 +954,28 @@ function buildZip(files){
 
 $('shuffleBtn').addEventListener('click', regenerate);
 
+function notifyIfScaledDown(originalCfg, scaled){
+  if(!scaled) return;
+  alert('お使いの端末(iOS)では一度に書き出せる画像サイズに上限があるため、解像度を自動的に縮小してダウンロードしました。\n元の解像度でダウンロードしたい場合は、パソコンのブラウザをご利用いただくか、「分割印刷」機能をお使いください。');
+}
+
 $('downloadBtn').addEventListener('click', () => {
   if(!state) regenerate();
-  draw(state.cfg, state.positions, { showAnswers:false });
+  const { cfg: exportCfg, scaled } = getExportCfg(state.cfg);
+  draw(exportCfg, state.positions, { showAnswers:false });
   downloadCanvas('漢字まちがい探し_問題.png');
+  notifyIfScaledDown(state.cfg, scaled);
+  setTimeout(() => drawPreview(false), 50);
 });
 
 $('answerBtn').addEventListener('click', () => {
   if(!state) regenerate();
-  draw(state.cfg, state.positions, { showAnswers:true });
+  const { cfg: exportCfg, scaled } = getExportCfg(state.cfg);
+  draw(exportCfg, state.positions, { showAnswers:true });
   downloadCanvas('漢字まちがい探し_解答.png');
-  // redraw plain version back to view
-  setTimeout(() => draw(state.cfg, state.positions, { showAnswers:false }), 50);
+  notifyIfScaledDown(state.cfg, scaled);
+  // redraw plain preview version back to view
+  setTimeout(() => drawPreview(false), 50);
 });
 
 // live-update on any input change (re-draw with same positions if grid size unchanged)
@@ -861,7 +985,7 @@ $('answerBtn').addEventListener('click', () => {
     const cfg = readConfig();
     // if rows/cols/wrongCount changed, need new positions -> handled by their own listeners
     state.cfg = cfg;
-    draw(cfg, state.positions, { showAnswers:false });
+    drawPreview(false);
   }));
 
 ['paperSize','orientation','dpi','canvasW','canvasH'].forEach(id => $(id).addEventListener('input', handleSizeChange));
